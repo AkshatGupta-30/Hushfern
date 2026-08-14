@@ -1,0 +1,59 @@
+@use "tokens";
+
+@mixin mono-numbers {
+  font-family: tokens.$font-mono;
+  font-variant-numeric: tabular-nums;
+}
+
+@mixin raised($size: regular, $background: surface) {
+  background: tokens.color-var($background);
+
+  @if $size == small {
+    box-shadow: var(--shadow-raised-small);
+  } @else {
+    box-shadow: var(--shadow-raised);
+  }
+}
+
+@mixin recessed($size: regular, $background: surface-pressed) {
+  background: tokens.color-var($background);
+
+  @if $size == small {
+    box-shadow: var(--shadow-pressed-small);
+  } @else {
+    box-shadow: var(--shadow-pressed);
+  }
+}
+
+@mixin panel($radius: lg, $background: surface) {
+  @include raised(regular, $background);
+  border-radius: tokens.radius($radius);
+}
+
+@mixin pressable($radius: md, $background: surface-raised) {
+  @include raised(small, $background);
+  border: 0;
+  border-radius: tokens.radius($radius);
+  cursor: pointer;
+
+  &:active {
+    @include recessed(small);
+  }
+}
+
+@mixin focus-ring {
+  outline: 3px solid tokens.color-var(accent-strong);
+  outline-offset: 3px;
+}
+
+@mixin respond-down($breakpoint) {
+  @media (max-width: tokens.breakpoint($breakpoint)) {
+    @content;
+  }
+}
+
+@mixin forced-colors {
+  @media (forced-colors: active) {
+    @content;
+  }
+}

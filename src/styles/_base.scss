@@ -1,0 +1,119 @@
+@use "tokens";
+@use "mixins";
+
+@include tokens.emit-custom-properties;
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: tokens.color-var(bg);
+}
+
+body {
+  margin: 0;
+  background: tokens.color-var(bg);
+  color: tokens.color-var(text);
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  color: inherit;
+  transition:
+    color tokens.$motion-fast,
+    background-color tokens.$motion-fast,
+    box-shadow tokens.$motion-fast,
+    transform tokens.$motion-fast;
+
+  &:active {
+    transform: translateY(1px);
+  }
+}
+
+button,
+input[type="range"] {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+input:focus-visible,
+a:focus-visible {
+  @include mixins.focus-ring;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.brand-lockup {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 12px;
+}
+
+.brand-mark {
+  @include mixins.raised(small, surface-raised);
+  display: inline-grid;
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: tokens.radius(md);
+  color: tokens.color-var(accent-strong);
+  font-family: tokens.$font-mono;
+  font-size: 0.72rem;
+  font-weight: 780;
+  letter-spacing: 0.06em;
+}
+
+.section-label {
+  margin: 0 0 4px;
+  color: tokens.color-var(accent);
+  font-size: 0.68rem;
+  font-weight: 720;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.section-heading-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+@include mixins.forced-colors {
+  .brand-mark {
+    border: 1px solid ButtonText;
+    box-shadow: none;
+  }
+}

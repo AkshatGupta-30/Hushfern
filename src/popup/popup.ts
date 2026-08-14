@@ -1,4 +1,4 @@
-import './popup.css'
+import './popup.scss'
 
 const SETTINGS_KEY = 'localGuardianSettings'
 const DEFAULT_SETTINGS: LocalGuardianSettings = {

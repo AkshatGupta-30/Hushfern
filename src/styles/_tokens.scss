@@ -1,0 +1,96 @@
+@use "sass:map";
+
+$colors: (
+  bg: #18232d,
+  surface: #202d38,
+  surface-raised: #253541,
+  surface-soft: #1c2832,
+  surface-pressed: #1b2731,
+  edge-light: rgb(88 112 127 / 35%),
+  edge-dark: rgb(7 12 17 / 58%),
+  divider: rgb(139 160 172 / 18%),
+  text: #f2f6f7,
+  text-muted: #bac6cc,
+  text-subtle: #93a4ad,
+  accent: #75d6c5,
+  accent-strong: #98e8d9,
+  accent-ink: #102a29,
+  danger: #ffaaa6,
+  warning: #f3c782,
+  success: #8de0bd,
+);
+
+$radii: (
+  xs: 4px,
+  sm: 8px,
+  md: 11px,
+  lg: 14px,
+  round: 999px,
+);
+
+$breakpoints: (
+  compact: 760px,
+);
+
+$font-sans: "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+$font-mono: ui-monospace, "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+$motion-fast: 180ms ease;
+
+@function color($name) {
+  @if not map.has-key($colors, $name) {
+    @error "Unknown LocalGuardian color token: #{$name}";
+  }
+
+  @return map.get($colors, $name);
+}
+
+@function color-var($name) {
+  @if not map.has-key($colors, $name) {
+    @error "Unknown LocalGuardian color token: #{$name}";
+  }
+
+  @return var(--#{$name});
+}
+
+@function radius($size) {
+  @if not map.has-key($radii, $size) {
+    @error "Unknown LocalGuardian radius token: #{$size}";
+  }
+
+  @return map.get($radii, $size);
+}
+
+@function breakpoint($name) {
+  @if not map.has-key($breakpoints, $name) {
+    @error "Unknown LocalGuardian breakpoint: #{$name}";
+  }
+
+  @return map.get($breakpoints, $name);
+}
+
+@mixin emit-custom-properties {
+  :root {
+    color-scheme: dark;
+
+    @each $name, $value in $colors {
+      --#{$name}: #{$value};
+    }
+
+    --radius: #{radius(lg)};
+    --shadow-raised:
+      -7px -7px 15px #{color-var(edge-light)},
+      8px 8px 18px #{color-var(edge-dark)};
+    --shadow-raised-small:
+      -3px -3px 7px #{color-var(edge-light)},
+      4px 4px 9px #{color-var(edge-dark)};
+    --shadow-pressed:
+      inset 4px 4px 9px #{color-var(edge-dark)},
+      inset -4px -4px 9px #{color-var(edge-light)};
+    --shadow-pressed-small:
+      inset 2px 2px 5px #{color-var(edge-dark)},
+      inset -2px -2px 5px #{color-var(edge-light)};
+    font-family: $font-sans;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+  }
+}

@@ -1,4 +1,4 @@
-import './analytics.css'
+import './analytics.scss'
 
 const ANALYTICS_KEY = 'localGuardianAnalytics'
 const DEFAULT_RANGE = 30
