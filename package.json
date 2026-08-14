@@ -7,8 +7,9 @@
   },
   "type": "module",
   "scripts": {
-    "dev": "vite build --watch",
-    "build": "vite build",
+    "prepare:model": "node scripts/fetch-model.mjs",
+    "dev": "yarn prepare:model && vite build --watch",
+    "build": "yarn prepare:model && vite build",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

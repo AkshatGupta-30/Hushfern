@@ -2,6 +2,13 @@ import { env, pipeline } from '@huggingface/transformers';
 import ortWasmFactoryUrl from '../../node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.asyncify.mjs?url';
 import ortWasmBinaryUrl from '../../node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.asyncify.wasm?url';
 
+// The release build packages a pinned, hash-verified model under /models.
+// Disable every runtime fallback to the Hugging Face Hub so the extension's
+// executable inference graph is fully contained in the reviewed MV3 package.
+env.allowRemoteModels = false;
+env.allowLocalModels = true;
+env.localModelPath = chrome.runtime.getURL('models/');
+
 // Transformers.js otherwise points an offscreen window at jsDelivr for these
 // ONNX runtime files. MV3 forbids remotely hosted executable code, so both the
 // factory module and binary must resolve to assets packaged by Vite.

@@ -1,2 +1,8 @@
 dist/
 node_modules/
+public/models/Xenova/toxic-bert/config.json
+public/models/Xenova/toxic-bert/special_tokens_map.json
+public/models/Xenova/toxic-bert/tokenizer.json
+public/models/Xenova/toxic-bert/tokenizer_config.json
+public/models/Xenova/toxic-bert/vocab.txt
+public/models/Xenova/toxic-bert/onnx/model.onnx

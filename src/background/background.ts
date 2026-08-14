@@ -812,9 +812,9 @@ chrome.runtime.onInstalled.addListener(() => {
   void initializeStorageDefaults().catch((error) => {
     console.error('[Hushfern BG] Failed to initialize storage defaults:', error);
   });
-  // Start the large model download immediately after install/update. The
-  // offscreen document acknowledges synchronously and owns the long-running
-  // download, so this event does not depend on service-worker lifetime.
+  // Warm the packaged model immediately after install/update. The offscreen
+  // document acknowledges synchronously and owns initialization, so this event
+  // does not depend on service-worker lifetime.
   void warmUpClassifier().catch((error) => {
     console.error('[Hushfern BG] Classifier warm-up could not be started:', error);
   });

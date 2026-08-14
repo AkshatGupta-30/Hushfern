@@ -1,6 +1,6 @@
 # Hushfern
 
-Hushfern is a Manifest V3 Chrome extension that creates a calmer layer for the web. It classifies readable website text locally with `Xenova/toxic-bert` and softens content above your chosen toxicity threshold. The model begins downloading into Chrome's local cache as soon as the extension is installed or updated. After it has been cached, classification stays on the device; analyzed text is not sent to an application server.
+Hushfern is a Manifest V3 Chrome extension that creates a calmer layer for the web. It classifies readable website text locally with a pinned `Xenova/toxic-bert` model and softens content above your chosen toxicity threshold. The release build packages the hash-verified model with the extension, remote model loading is disabled, and analyzed text never leaves the device.
 
 ## Features
 
@@ -8,9 +8,8 @@ Hushfern is a Manifest V3 Chrome extension that creates a calmer layer for the w
 - Adjustable blur intensity from 3px to 10px.
 - Live analyzed and hidden-content counts for the active page.
 - Safe asynchronous blur handling that ignores detached or replaced DOM nodes.
-- Hover or keyboard reveal controls for reporting false positives and allowing a whole site.
-- Exact-text and domain allowlists stored in `chrome.storage.local`.
-- A private analytics page with recent trends, false-positive counts, and per-domain totals.
+- Optional hover reveal, with keyboard focus reveal always available.
+- A private analytics page with recent trends and per-domain totals.
 - Rolling 90-day analytics history stored only in the current Chrome profile.
 
 ## Build and load
@@ -25,16 +24,14 @@ yarn build
 
 Then open `chrome://extensions`, enable **Developer mode**, choose **Load unpacked**, and select the generated `dist` directory.
 
-The first classification may take longer while the model assets are downloaded and cached. Later classifications use the cached model and WebGPU when available, with WASM as the fallback.
+The first clean build downloads the pinned fp32 model revision once, verifies every file's SHA-256, and copies it into `dist`. Installed builds never fetch model artifacts at runtime. Classification uses WebGPU when available, with the packaged WASM runtime as the fallback.
 
 ## Use
 
 1. Open any normal HTTP or HTTPS website, then open the Hushfern toolbar popup.
 2. Move either slider; settings are saved immediately and applied to the current page.
 3. Hover or focus a blurred paragraph to reveal it temporarily.
-4. Choose **False positive** to allow that exact text, or **Always show on this site** to allow the current domain.
-   If a site was allowed by mistake, use **Resume protection on this site** in the popup.
-5. Open **View analytics** for locally stored historical trends.
+4. Open **View protection history** for locally stored historical trends.
 
 ## Website access
 

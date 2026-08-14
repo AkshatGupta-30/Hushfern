@@ -38,7 +38,6 @@ const emptyElement = requireElement<HTMLElement>('analyticsEmpty')
 const contentElement = requireElement<HTMLElement>('analyticsContent')
 const analyzedElement = requireElement<HTMLElement>('summaryAnalyzed')
 const toxicElement = requireElement<HTMLElement>('summaryToxic')
-const falsePositiveElement = requireElement<HTMLElement>('summaryFalsePositives')
 const rateElement = requireElement<HTMLElement>('summaryRate')
 const rangeLabelElement = requireElement<HTMLElement>('summaryRange')
 const chartElement = requireElement<HTMLElement>('historyChart')
@@ -51,11 +50,6 @@ const domainEmptyElement = requireElement<HTMLElement>('domainEmpty')
 const lifetimeElement = requireElement<HTMLElement>('lifetimeTotal')
 const lastUpdatedElement = requireElement<HTMLElement>('lastUpdated')
 const rangeButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-range]'))
-const exceptionsSectionElement = requireElement<HTMLElement>('exceptionsSection')
-const exceptionRowsElement = requireElement<HTMLUListElement>('exceptionRows')
-const exceptionEmptyElement = requireElement<HTMLElement>('exceptionEmpty')
-const exceptionHeadingElement = requireElement<HTMLElement>('exceptions-title')
-const exceptionStatusElement = requireElement<HTMLElement>('exceptionStatus')
 
 let selectedRange = DEFAULT_RANGE
 let analytics: AnalyticsModel = emptyAnalytics()
@@ -175,83 +169,6 @@ function readAnalytics(): Promise<unknown> {
   })
 }
 
-function readWhitelist(): Promise<unknown> {
-  return new Promise((resolve, reject) => {
-    chrome.storage.local.get('localGuardianWhitelist', (result) => {
-      const error = chrome.runtime.lastError
-      if (error) reject(new Error(error.message))
-      else resolve(result.localGuardianWhitelist)
-    })
-  })
-}
-
-function focusExceptionHeading(): void {
-  const originalTabIndex = exceptionHeadingElement.getAttribute('tabindex')
-  exceptionHeadingElement.setAttribute('tabindex', '-1')
-  exceptionHeadingElement.focus({ preventScroll: true })
-  exceptionHeadingElement.addEventListener(
-    'blur',
-    () => {
-      if (originalTabIndex === null) exceptionHeadingElement.removeAttribute('tabindex')
-      else exceptionHeadingElement.setAttribute('tabindex', originalTabIndex)
-    },
-    { once: true },
-  )
-}
-
-function renderTextExceptions(value: unknown): void {
-  const source = asRecord(value)
-  const texts = (Array.isArray(source.texts) ? source.texts : [])
-    .map((rawEntry) => {
-      const entry = typeof rawEntry === 'string' ? { text: rawEntry } : asRecord(rawEntry)
-      return typeof entry.text === 'string' ? entry.text : ''
-    })
-    .filter(Boolean)
-  const removalHadFocus = exceptionRowsElement.contains(document.activeElement)
-  if (removalHadFocus) focusExceptionHeading()
-
-  exceptionsSectionElement.hidden = false
-  exceptionRowsElement.replaceChildren()
-  exceptionEmptyElement.hidden = texts.length > 0
-
-  for (const text of texts) {
-    const row = document.createElement('li')
-    row.className = 'exception-row'
-    const label = document.createElement('span')
-    label.textContent = text
-    label.title = text
-    const button = document.createElement('button')
-    button.type = 'button'
-    button.textContent = 'Remove'
-    button.setAttribute('aria-label', `Remove text exception: ${text.slice(0, 80)}`)
-    button.addEventListener('click', () => {
-      if (button.getAttribute('aria-disabled') === 'true') return
-      button.setAttribute('aria-disabled', 'true')
-      button.textContent = 'Removing…'
-      exceptionStatusElement.textContent = ''
-      chrome.runtime.sendMessage({ type: 'UPDATE_WHITELIST', operation: 'removeText', value: text }, (response: unknown) => {
-        const error = chrome.runtime.lastError
-        const envelope = asRecord(response)
-        if (error || envelope.ok !== true) {
-          const message = error?.message || (typeof envelope.error === 'string' ? envelope.error : 'Unknown error')
-          console.error('[Hushfern Analytics] Could not remove text exception:', message)
-          button.removeAttribute('aria-disabled')
-          button.textContent = 'Remove — try again'
-          exceptionStatusElement.textContent = 'The text exception could not be removed. Try again.'
-          button.focus({ preventScroll: true })
-          return
-        }
-
-        if (exceptionRowsElement.contains(button)) focusExceptionHeading()
-        renderTextExceptions(envelope.whitelist)
-        exceptionStatusElement.textContent = 'Text exception removed. The content can be evaluated again.'
-      })
-    })
-    row.append(label, button)
-    exceptionRowsElement.append(row)
-  }
-}
-
 function toDateKey(date: Date): string {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
@@ -343,7 +260,7 @@ function chartPointsForSelection(points: DatePoint[]): ChartPoint[] {
 }
 
 function chartDetail(point: ChartPoint): string {
-  return `${point.label}: ${formatNumber(point.analyzed)} analyzed, ${formatNumber(point.toxic)} hidden, ${formatNumber(point.falsePositives)} false positives`
+  return `${point.label}: ${formatNumber(point.analyzed)} analyzed, ${formatNumber(point.toxic)} hidden`
 }
 
 function showChartTooltip(point: ChartPoint, target: HTMLElement): void {
@@ -372,7 +289,6 @@ function renderSummary(points: DatePoint[]): void {
 
   analyzedElement.textContent = formatNumber(totals.analyzed)
   toxicElement.textContent = formatNumber(totals.toxic)
-  falsePositiveElement.textContent = formatNumber(totals.falsePositives)
   rangeLabelElement.textContent = rangeLabel(selectedRange)
   rateElement.textContent = `${rate.toLocaleString(undefined, { maximumFractionDigits: 1 })}% of analyzed content`
   lifetimeElement.textContent = `${formatNumber(analytics.totals.analyzed)} analyzed all time`
@@ -386,12 +302,12 @@ function renderChart(points: DatePoint[]): void {
   hideChartTooltip()
 
   const hasRangeActivity = chartPoints.some(
-    (point) => point.analyzed > 0 || point.toxic > 0 || point.falsePositives > 0,
+    (point) => point.analyzed > 0 || point.toxic > 0,
   )
   const hasTodayTotalsWithoutHourlyDetail =
     selectedRange === 1 &&
     !hasRangeActivity &&
-    Boolean(points[0] && (points[0].analyzed || points[0].toxic || points[0].falsePositives))
+    Boolean(points[0] && (points[0].analyzed || points[0].toxic))
   chartEmptyElement.hidden = hasRangeActivity
   chartEmptyElement.textContent = hasTodayTotalsWithoutHourlyDetail
     ? 'Hourly activity begins after this update. Today’s total is shown above.'
@@ -438,7 +354,7 @@ function renderChart(points: DatePoint[]): void {
   caption.textContent = `Hushfern activity for ${rangeLabel(selectedRange).toLowerCase()}`
   const head = document.createElement('thead')
   const headRow = document.createElement('tr')
-  for (const label of [selectedRange === 1 ? 'Time' : 'Date', 'Analyzed', 'Hidden', 'False positives']) {
+  for (const label of [selectedRange === 1 ? 'Time' : 'Date', 'Analyzed', 'Hidden']) {
     const cell = document.createElement('th')
     cell.scope = 'col'
     cell.textContent = label
@@ -449,7 +365,7 @@ function renderChart(points: DatePoint[]): void {
   const body = document.createElement('tbody')
   for (const point of chartPoints) {
     const row = document.createElement('tr')
-    const values = [point.tableLabel, point.analyzed, point.toxic, point.falsePositives]
+    const values = [point.tableLabel, point.analyzed, point.toxic]
     for (const [index, value] of values.entries()) {
       const cell = document.createElement(index === 0 ? 'th' : 'td')
       if (index === 0) (cell as HTMLTableCellElement).scope = 'row'
@@ -474,7 +390,7 @@ function renderDomains(points: DatePoint[]): void {
   }
 
   const sorted = [...domains.entries()]
-    .filter(([, totals]) => totals.analyzed || totals.toxic || totals.falsePositives)
+    .filter(([, totals]) => totals.analyzed || totals.toxic)
     .sort(([, left], [, right]) => right.toxic - left.toxic || right.analyzed - left.analyzed)
     .slice(0, 10)
 
@@ -484,7 +400,7 @@ function renderDomains(points: DatePoint[]): void {
 
   for (const [domain, totals] of sorted) {
     const row = document.createElement('tr')
-    for (const [index, value] of [domain, totals.analyzed, totals.toxic, totals.falsePositives].entries()) {
+    for (const [index, value] of [domain, totals.analyzed, totals.toxic].entries()) {
       const cell = document.createElement(index === 0 ? 'th' : 'td')
       if (index === 0) (cell as HTMLTableCellElement).scope = 'row'
       cell.textContent = typeof value === 'number' ? formatNumber(value) : value
@@ -527,24 +443,11 @@ function render(): void {
 }
 
 async function initialize(): Promise<void> {
-  const [analyticsResult, whitelistResult] = await Promise.allSettled([
-    readAnalytics(),
-    readWhitelist(),
-  ])
-
-  if (whitelistResult.status === 'fulfilled') {
-    renderTextExceptions(whitelistResult.value)
-  } else {
-    console.error('[Hushfern Analytics] Could not load text exceptions:', whitelistResult.reason)
-    exceptionsSectionElement.hidden = false
-    exceptionEmptyElement.textContent = 'Text exceptions could not be loaded. Refresh this page to try again.'
-  }
-
-  if (analyticsResult.status === 'fulfilled') {
-    analytics = normalizeAnalytics(analyticsResult.value)
+  try {
+    analytics = normalizeAnalytics(await readAnalytics())
     render()
-  } else {
-    console.error('[Hushfern Analytics] Could not load analytics:', analyticsResult.reason)
+  } catch (error) {
+    console.error('[Hushfern Analytics] Could not load analytics:', error)
     loadingElement.textContent = 'Your local history could not be loaded. Refresh this page to try again.'
   }
 }
@@ -564,7 +467,6 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     analytics = normalizeAnalytics(changes[ANALYTICS_KEY].newValue)
     render()
   }
-  if (changes.localGuardianWhitelist) renderTextExceptions(changes.localGuardianWhitelist.newValue)
 })
 
 void initialize()

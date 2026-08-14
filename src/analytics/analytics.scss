@@ -1,6 +1,6 @@
 @use "../styles/theme" as *;
 
-$analytics-panels: ".history-section", ".domains-section", ".exceptions-section";
+$analytics-panels: ".history-section", ".domains-section";
 
 .analytics-page {
   min-width: 320px;
@@ -199,7 +199,7 @@ $analytics-panels: ".history-section", ".domains-section", ".exceptions-section"
 
 .summary-grid {
   display: grid;
-  grid-template-columns: 1.25fr 1fr 1fr;
+  grid-template-columns: 1.25fr 1fr;
   gap: 16px;
   margin-top: 46px;
 }
@@ -275,54 +275,6 @@ $analytics-panels: ".history-section", ".domains-section", ".exceptions-section"
       color: color-var(text-subtle);
       font-size: 0.74rem;
       line-height: 1.48;
-    }
-  }
-}
-
-.exceptions-list {
-  display: grid;
-  gap: 11px;
-  margin: 22px 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.exception-row {
-  @include recessed(small);
-  display: flex;
-  min-height: 60px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 8px 9px 8px 16px;
-  border-radius: radius(md);
-
-  span {
-    min-width: 0;
-    overflow: hidden;
-    color: color-var(text-muted);
-    font-size: 0.75rem;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  button {
-    @include pressable(sm);
-    flex: 0 0 auto;
-    min-height: 42px;
-    padding: 0 14px;
-    color: color-var(text);
-    font-size: 0.7rem;
-    font-weight: 720;
-
-    &:hover {
-      color: color-var(danger);
-    }
-
-    &[aria-disabled="true"] {
-      @include recessed(small);
-      cursor: wait;
-      opacity: 0.72;
     }
   }
 }

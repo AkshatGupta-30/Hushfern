@@ -62,11 +62,6 @@
             <strong id="summaryToxic">0</strong>
             <span id="summaryRate">0% of analyzed content</span>
           </article>
-          <article class="summary-item">
-            <p>False positives reported</p>
-            <strong id="summaryFalsePositives">0</strong>
-            <span>Used to refine your local allowlist</span>
-          </article>
         </section>
 
         <section class="history-section" aria-labelledby="history-title">
@@ -110,7 +105,6 @@
                   <th scope="col">Domain</th>
                   <th scope="col">Analyzed</th>
                   <th scope="col">Hidden</th>
-                  <th scope="col">False positives</th>
                 </tr>
               </thead>
               <tbody id="domainRows"></tbody>
@@ -120,21 +114,9 @@
         </section>
       </div>
 
-      <section class="exceptions-section" id="exceptionsSection" aria-labelledby="exceptions-title" hidden>
-        <div class="section-heading-row">
-          <div>
-            <h2 id="exceptions-title">Text exceptions</h2>
-            <p>Exact text you marked as a false positive. Removing an entry lets it be evaluated again.</p>
-          </div>
-        </div>
-        <ul class="exceptions-list" id="exceptionRows"></ul>
-        <p class="domain-empty" id="exceptionEmpty">No text exceptions saved.</p>
-        <p class="visually-hidden" id="exceptionStatus" role="status" aria-live="polite" aria-atomic="true"></p>
-      </section>
-
       <footer class="analytics-footer">
         <p id="lastUpdated">History updates automatically while this page is open.</p>
-        <p>Hushfern keeps analysis, settings, allowlists, and statistics in Chrome local storage.</p>
+        <p>Hushfern keeps settings and protection statistics in Chrome local storage.</p>
       </footer>
     </main>
 
