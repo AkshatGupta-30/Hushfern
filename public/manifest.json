@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "LocalGuardian - On-device Moderator",
+  "name": "Hushfern - On-device Moderator",
   "version": "1.2.2",
   "minimum_chrome_version": "116",
   "description": "Private, on-device toxicity moderation with adjustable blurring and local analytics.",
@@ -18,7 +18,7 @@
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "LocalGuardian controls"
+    "default_title": "Hushfern controls"
   },
   "options_page": "analytics.html",
   "content_scripts": [

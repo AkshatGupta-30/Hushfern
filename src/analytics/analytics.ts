@@ -234,7 +234,7 @@ function renderTextExceptions(value: unknown): void {
         const envelope = asRecord(response)
         if (error || envelope.ok !== true) {
           const message = error?.message || (typeof envelope.error === 'string' ? envelope.error : 'Unknown error')
-          console.error('[LocalGuardian Analytics] Could not remove text exception:', message)
+          console.error('[Hushfern Analytics] Could not remove text exception:', message)
           button.removeAttribute('aria-disabled')
           button.textContent = 'Remove — try again'
           exceptionStatusElement.textContent = 'The text exception could not be removed. Try again.'
@@ -402,7 +402,7 @@ function renderChart(points: DatePoint[]): void {
 
   chartElement.setAttribute(
     'aria-label',
-    selectedRange === 1 ? 'Hourly LocalGuardian protection activity for today' : 'Daily LocalGuardian protection activity',
+    selectedRange === 1 ? 'Hourly Hushfern protection activity for today' : 'Daily Hushfern protection activity',
   )
   chartElement.style.setProperty('--day-count', String(chartPoints.length))
   chartElement.style.setProperty('--chart-min-width', selectedRange === 90 ? '1040px' : selectedRange === 30 ? '680px' : '100%')
@@ -435,7 +435,7 @@ function renderChart(points: DatePoint[]): void {
 
   const accessibleTable = document.createElement('table')
   const caption = document.createElement('caption')
-  caption.textContent = `LocalGuardian activity for ${rangeLabel(selectedRange).toLowerCase()}`
+  caption.textContent = `Hushfern activity for ${rangeLabel(selectedRange).toLowerCase()}`
   const head = document.createElement('thead')
   const headRow = document.createElement('tr')
   for (const label of [selectedRange === 1 ? 'Time' : 'Date', 'Analyzed', 'Hidden', 'False positives']) {
@@ -535,7 +535,7 @@ async function initialize(): Promise<void> {
   if (whitelistResult.status === 'fulfilled') {
     renderTextExceptions(whitelistResult.value)
   } else {
-    console.error('[LocalGuardian Analytics] Could not load text exceptions:', whitelistResult.reason)
+    console.error('[Hushfern Analytics] Could not load text exceptions:', whitelistResult.reason)
     exceptionsSectionElement.hidden = false
     exceptionEmptyElement.textContent = 'Text exceptions could not be loaded. Refresh this page to try again.'
   }
@@ -544,7 +544,7 @@ async function initialize(): Promise<void> {
     analytics = normalizeAnalytics(analyticsResult.value)
     render()
   } else {
-    console.error('[LocalGuardian Analytics] Could not load analytics:', analyticsResult.reason)
+    console.error('[Hushfern Analytics] Could not load analytics:', analyticsResult.reason)
     loadingElement.textContent = 'Your local history could not be loaded. Refresh this page to try again.'
   }
 }

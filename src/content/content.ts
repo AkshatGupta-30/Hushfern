@@ -1,4 +1,4 @@
-console.log('[LocalGuardian Content] Content script injected.');
+console.log('[Hushfern Content] Content script injected.');
 
 const SETTINGS_STORAGE_KEY = 'localGuardianSettings';
 const WHITELIST_STORAGE_KEY = 'localGuardianWhitelist';
@@ -6,7 +6,7 @@ const QUEUE_ANALYSIS_TYPE = 'QUEUE_ANALYSIS';
 const ANALYSIS_RESULT_TYPE = 'ANALYSIS_RESULT';
 const PING_CONTENT_TYPE = 'PING_CONTENT';
 
-const DEFAULT_SETTINGS: LocalGuardianSettings = {
+const DEFAULT_SETTINGS: HushfernSettings = {
   toxicityThreshold: 50,
   blurIntensity: 8,
   keepHiddenOnHover: true,
@@ -89,7 +89,7 @@ const QUEUE_DELAY_MS = 250;
 const ANALYSIS_TIMEOUT_MS = 15 * 60_000;
 const HOSTNAME = window.location.hostname.trim().toLowerCase();
 
-interface LocalGuardianSettings {
+interface HushfernSettings {
   toxicityThreshold: number;
   blurIntensity: number;
   keepHiddenOnHover: boolean;
@@ -106,7 +106,7 @@ interface WhitelistDomainEntry {
   addedAt: number;
 }
 
-interface LocalGuardianWhitelist {
+interface HushfernWhitelist {
   texts: WhitelistTextEntry[];
   domains: WhitelistDomainEntry[];
 }
@@ -187,7 +187,7 @@ function clampInteger(value: unknown, minimum: number, maximum: number, fallback
   return Math.min(maximum, Math.max(minimum, Math.round(value)));
 }
 
-function normalizeSettings(value: unknown): LocalGuardianSettings {
+function normalizeSettings(value: unknown): HushfernSettings {
   const candidate = isRecord(value) ? value : {};
   return {
     toxicityThreshold: clampInteger(candidate.toxicityThreshold, 40, 80, DEFAULT_SETTINGS.toxicityThreshold),
@@ -208,7 +208,7 @@ function normalizeDomain(value: unknown): string {
   return typeof value === 'string' ? value.trim().toLowerCase().slice(0, 253) : '';
 }
 
-function normalizeWhitelist(value: unknown): LocalGuardianWhitelist {
+function normalizeWhitelist(value: unknown): HushfernWhitelist {
   const candidate = isRecord(value) ? value : {};
   const texts: WhitelistTextEntry[] = [];
   const domains: WhitelistDomainEntry[] = [];
@@ -478,12 +478,12 @@ function stopInvalidatedContext(): void {
 
   for (const pending of pendingAnalysisRequests.values()) {
     clearTimeout(pending.timeout);
-    pending.reject(new Error('Extension context invalidated. Refresh this page to reconnect LocalGuardian.'));
+    pending.reject(new Error('Extension context invalidated. Refresh this page to reconnect Hushfern.'));
   }
   pendingAnalysisRequests.clear();
 
   for (const record of [...trackedRecords]) removeRecord(record, true);
-  console.info('[LocalGuardian Content] Extension was reloaded. Refresh this page to reconnect LocalGuardian.');
+  console.info('[Hushfern Content] Extension was reloaded. Refresh this page to reconnect Hushfern.');
 }
 
 function handleRuntimeError(error: unknown): boolean {
@@ -505,7 +505,7 @@ function sendRuntimeMessage(message: Record<string, unknown>): void {
     });
   } catch (error) {
     if (!handleRuntimeError(error)) {
-      console.debug('[LocalGuardian Content] Runtime message could not be sent:', error);
+      console.debug('[Hushfern Content] Runtime message could not be sent:', error);
     }
   }
 }
@@ -513,7 +513,7 @@ function sendRuntimeMessage(message: Record<string, unknown>): void {
 function requestRuntimeMessage(message: Record<string, unknown>): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
     if (!extensionContextValid) {
-      reject(new Error('Extension context invalidated. Refresh this page to reconnect LocalGuardian.'));
+      reject(new Error('Extension context invalidated. Refresh this page to reconnect Hushfern.'));
       return;
     }
 
@@ -641,8 +641,8 @@ function createDisclosure(record: AnalysisRecord): HTMLElement {
   disclosure.className = 'localguardian-a11y-disclosure';
   disclosure.dataset.localguardianUi = 'true';
   disclosure.textContent = settings.keepHiddenOnHover
-    ? `LocalGuardian hid potentially toxic text at ${Math.round(record.score * 100)} percent. Focus this block to reveal it.`
-    : `LocalGuardian hid potentially toxic text at ${Math.round(record.score * 100)} percent. Hover or focus this block to reveal it.`;
+    ? `Hushfern hid potentially toxic text at ${Math.round(record.score * 100)} percent. Focus this block to reveal it.`
+    : `Hushfern hid potentially toxic text at ${Math.round(record.score * 100)} percent. Hover or focus this block to reveal it.`;
   return disclosure;
 }
 
@@ -780,7 +780,7 @@ function processQueue(): void {
   void requestAnalysis(payloads).then((response) => {
     requestInFlight = false;
     if (!Array.isArray(response.results)) {
-      console.warn('[LocalGuardian Content] Analysis request failed: Invalid response');
+      console.warn('[Hushfern Content] Analysis request failed: Invalid response');
       requeueItems(batch);
       return;
     }
@@ -826,7 +826,7 @@ function processQueue(): void {
     requestInFlight = false;
     if (!handleRuntimeError(error)) {
       console.warn(
-        '[LocalGuardian Content] Analysis request failed:',
+        '[Hushfern Content] Analysis request failed:',
         error instanceof Error ? error.message : 'Unknown error',
       );
       requeueItems(batch);
@@ -926,8 +926,8 @@ function updateAllRecords(): void {
       record.element.classList.toggle('localguardian-hover-locked', settings.keepHiddenOnHover);
       if (record.disclosure) {
         record.disclosure.textContent = settings.keepHiddenOnHover
-          ? `LocalGuardian hid potentially toxic text at ${Math.round(record.score * 100)} percent. Focus this block to reveal it.`
-          : `LocalGuardian hid potentially toxic text at ${Math.round(record.score * 100)} percent. Hover or focus this block to reveal it.`;
+          ? `Hushfern hid potentially toxic text at ${Math.round(record.score * 100)} percent. Focus this block to reveal it.`
+          : `Hushfern hid potentially toxic text at ${Math.round(record.score * 100)} percent. Hover or focus this block to reveal it.`;
       }
     }
     evaluateRecord(record);
@@ -935,7 +935,7 @@ function updateAllRecords(): void {
   publishStats();
 }
 
-function isLocalGuardianMutation(mutation: MutationRecord): boolean {
+function isHushfernMutation(mutation: MutationRecord): boolean {
   const mutationElement = mutation.target.nodeType === Node.ELEMENT_NODE
     ? (mutation.target as Element)
     : mutation.target.parentElement;
@@ -990,7 +990,7 @@ const observer = new MutationObserver((mutations) => {
   let shouldPublish = false;
 
   for (const mutation of mutations) {
-    if (isLocalGuardianMutation(mutation)) continue;
+    if (isHushfernMutation(mutation)) continue;
 
     const changedElement = findTrackedTextElement(mutation.target) ?? findChangedAllowlistedElement(mutation.target);
     if (changedElement) {
@@ -1076,7 +1076,7 @@ async function initialize(): Promise<void> {
     settings = normalizeSettings(stored[SETTINGS_STORAGE_KEY]);
     applyWhitelist(stored[WHITELIST_STORAGE_KEY]);
   } catch (error) {
-    console.warn('[LocalGuardian Content] Using default settings because storage could not be read:', error);
+    console.warn('[Hushfern Content] Using default settings because storage could not be read:', error);
   }
 
   observer.observe(document.body, {

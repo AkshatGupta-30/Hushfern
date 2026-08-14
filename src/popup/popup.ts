@@ -1,13 +1,13 @@
 import './popup.scss'
 
 const SETTINGS_KEY = 'localGuardianSettings'
-const DEFAULT_SETTINGS: LocalGuardianSettings = {
+const DEFAULT_SETTINGS: HushfernSettings = {
   toxicityThreshold: 50,
   blurIntensity: 8,
   keepHiddenOnHover: true,
 }
 
-interface LocalGuardianSettings {
+interface HushfernSettings {
   toxicityThreshold: number
   blurIntensity: number
   keepHiddenOnHover: boolean
@@ -45,7 +45,7 @@ let currentSettings = { ...DEFAULT_SETTINGS }
 let activeTabId: number | undefined
 let pendingSettingsWrites = 0
 let activeSettingsWrite = false
-let latestPendingSettings: LocalGuardianSettings | null = null
+let latestPendingSettings: HushfernSettings | null = null
 
 function requireElement<T extends HTMLElement>(id: string): T {
   const element = document.getElementById(id)
@@ -59,8 +59,8 @@ function clampInteger(value: unknown, min: number, max: number, fallback: number
   return Math.min(max, Math.max(min, Math.round(numeric)))
 }
 
-function normalizeSettings(value: unknown): LocalGuardianSettings {
-  const stored = value && typeof value === 'object' ? (value as Partial<LocalGuardianSettings>) : {}
+function normalizeSettings(value: unknown): HushfernSettings {
+  const stored = value && typeof value === 'object' ? (value as Partial<HushfernSettings>) : {}
   return {
     toxicityThreshold: clampInteger(stored.toxicityThreshold, 40, 80, DEFAULT_SETTINGS.toxicityThreshold),
     blurIntensity: clampInteger(stored.blurIntensity, 3, 10, DEFAULT_SETTINGS.blurIntensity),
@@ -102,7 +102,7 @@ function updateRangeTrack(input: HTMLInputElement): void {
   input.style.setProperty('--range-progress', `${percentage}%`)
 }
 
-function renderSettings(settings: LocalGuardianSettings): void {
+function renderSettings(settings: HushfernSettings): void {
   currentSettings = settings
   toxicityInput.value = String(settings.toxicityThreshold)
   blurInput.value = String(settings.blurIntensity)
@@ -120,7 +120,7 @@ function renderSettings(settings: LocalGuardianSettings): void {
   updateRangeTrack(blurInput)
 }
 
-function runSettingsWrite(settingsToWrite: LocalGuardianSettings): void {
+function runSettingsWrite(settingsToWrite: HushfernSettings): void {
   activeSettingsWrite = true
   void writeLocalStorage({ [SETTINGS_KEY]: settingsToWrite })
     .then(() => {
@@ -141,7 +141,7 @@ function runSettingsWrite(settingsToWrite: LocalGuardianSettings): void {
       activeSettingsWrite = false
       const nextSettings = latestPendingSettings
       latestPendingSettings = null
-      console.error('[LocalGuardian Popup] Could not save settings:', error)
+      console.error('[Hushfern Popup] Could not save settings:', error)
       if (nextSettings) {
         pendingSettingsWrites = 1
         runSettingsWrite(nextSettings)
@@ -251,7 +251,7 @@ function renderActivityState(state: ActivityState, stats?: PageStats, host?: str
     disabled: {
       badge: 'Paused',
       title: 'Protection is paused',
-      message: 'LocalGuardian is available on this page but is currently disabled.',
+      message: 'Hushfern is available on this page but is currently disabled.',
     },
     unsupported: {
       badge: 'Unsupported',
@@ -261,7 +261,7 @@ function renderActivityState(state: ActivityState, stats?: PageStats, host?: str
     unavailable: {
       badge: 'Unavailable',
       title: 'Reload this page',
-      message: 'LocalGuardian could not reach the page. Reload it after installing or updating the extension.',
+      message: 'Hushfern could not reach the page. Reload it after installing or updating the extension.',
     },
     error: {
       badge: 'Error',
@@ -334,11 +334,11 @@ async function refreshPageStats(showLoading = true): Promise<void> {
       }
       renderActivityState(stats.enabled ? 'active' : 'disabled', stats, stats.hostname || tabHostname)
     } catch (error) {
-      console.info('[LocalGuardian Popup] Page stats are not available:', error)
+      console.info('[Hushfern Popup] Page stats are not available:', error)
       renderActivityState('unavailable', undefined, tabHostname)
     }
   } catch (error) {
-    console.error('[LocalGuardian Popup] Could not inspect active tab:', error)
+    console.error('[Hushfern Popup] Could not inspect active tab:', error)
     renderActivityState('error')
   } finally {
     refreshButton.disabled = false
@@ -353,7 +353,7 @@ async function initialize(): Promise<void> {
     const stored = await readLocalStorage(SETTINGS_KEY)
     renderSettings(normalizeSettings(stored[SETTINGS_KEY]))
   } catch (error) {
-    console.error('[LocalGuardian Popup] Could not load settings:', error)
+    console.error('[Hushfern Popup] Could not load settings:', error)
     settingsStatus.textContent = 'Using defaults'
     settingsStatus.dataset.state = 'error'
   }
@@ -398,7 +398,7 @@ resumeButton.addEventListener('click', async () => {
     await refreshPageStats(false)
     refreshButton.focus({ preventScroll: true })
   } catch (error) {
-    console.error('[LocalGuardian Popup] Could not resume protection:', error)
+    console.error('[Hushfern Popup] Could not resume protection:', error)
     renderActivityState('error', undefined, hostname)
     refreshButton.focus({ preventScroll: true })
   } finally {

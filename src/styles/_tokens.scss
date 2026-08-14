@@ -38,7 +38,7 @@ $motion-fast: 180ms ease;
 
 @function color($name) {
   @if not map.has-key($colors, $name) {
-    @error "Unknown LocalGuardian color token: #{$name}";
+    @error "Unknown Hushfern color token: #{$name}";
   }
 
   @return map.get($colors, $name);
@@ -46,7 +46,7 @@ $motion-fast: 180ms ease;
 
 @function color-var($name) {
   @if not map.has-key($colors, $name) {
-    @error "Unknown LocalGuardian color token: #{$name}";
+    @error "Unknown Hushfern color token: #{$name}";
   }
 
   @return var(--#{$name});
@@ -54,7 +54,7 @@ $motion-fast: 180ms ease;
 
 @function radius($size) {
   @if not map.has-key($radii, $size) {
-    @error "Unknown LocalGuardian radius token: #{$size}";
+    @error "Unknown Hushfern radius token: #{$size}";
   }
 
   @return map.get($radii, $size);
@@ -62,7 +62,7 @@ $motion-fast: 180ms ease;
 
 @function breakpoint($name) {
   @if not map.has-key($breakpoints, $name) {
-    @error "Unknown LocalGuardian breakpoint: #{$name}";
+    @error "Unknown Hushfern breakpoint: #{$name}";
   }
 
   @return map.get($breakpoints, $name);

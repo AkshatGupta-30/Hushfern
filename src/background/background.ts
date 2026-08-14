@@ -31,7 +31,7 @@ const MAX_BATCH_SIZE = 50;
 const MAX_TEXT_LENGTH = 50_000;
 const MAX_WHITELIST_ENTRIES = 100;
 
-type LocalGuardianSettings = typeof DEFAULT_SETTINGS;
+type HushfernSettings = typeof DEFAULT_SETTINGS;
 
 interface AnalyticsCounts {
   analyzed: number;
@@ -44,7 +44,7 @@ interface AnalyticsDay extends AnalyticsCounts {
   hours: Record<string, AnalyticsCounts>;
 }
 
-interface LocalGuardianAnalytics {
+interface HushfernAnalytics {
   days: Record<string, AnalyticsDay>;
   totals: AnalyticsCounts;
   updatedAt: string;
@@ -75,7 +75,7 @@ interface WhitelistDomainEntry {
   addedAt: number;
 }
 
-interface LocalGuardianWhitelist {
+interface HushfernWhitelist {
   texts: WhitelistTextEntry[];
   domains: WhitelistDomainEntry[];
 }
@@ -118,7 +118,7 @@ function sanitizedInteger(value: unknown, minimum: number, maximum: number, fall
   return Math.min(maximum, Math.max(minimum, Math.round(value)));
 }
 
-function sanitizeSettings(value: unknown): LocalGuardianSettings {
+function sanitizeSettings(value: unknown): HushfernSettings {
   const settings = isRecord(value) ? value : {};
 
   return {
@@ -128,7 +128,7 @@ function sanitizeSettings(value: unknown): LocalGuardianSettings {
   };
 }
 
-function sanitizeWhitelist(value: unknown): LocalGuardianWhitelist {
+function sanitizeWhitelist(value: unknown): HushfernWhitelist {
   const source = isRecord(value) ? value : {};
   const texts: WhitelistTextEntry[] = [];
   const domains: WhitelistDomainEntry[] = [];
@@ -171,8 +171,8 @@ function updateWhitelist(
   operation: 'addText' | 'removeText' | 'addDomain' | 'removeDomain',
   sender: chrome.runtime.MessageSender,
   value: unknown,
-): Promise<LocalGuardianWhitelist> {
-  let result: LocalGuardianWhitelist | null = null;
+): Promise<HushfernWhitelist> {
+  let result: HushfernWhitelist | null = null;
   const update = whitelistUpdateQueue.then(async () => {
     const stored = await chrome.storage.local.get(WHITELIST_STORAGE_KEY);
     const whitelist = sanitizeWhitelist(stored[WHITELIST_STORAGE_KEY]);
@@ -213,10 +213,10 @@ function updateWhitelist(
   });
 
   whitelistUpdateQueue = update.catch((error) => {
-    console.error('[LocalGuardian BG] Whitelist update failed:', error);
+    console.error('[Hushfern BG] Whitelist update failed:', error);
   });
 
-  return update.then(() => result as LocalGuardianWhitelist);
+  return update.then(() => result as HushfernWhitelist);
 }
 
 function sanitizedCount(value: unknown): number {
@@ -234,7 +234,7 @@ function sanitizeCounts(value: unknown): AnalyticsCounts {
   };
 }
 
-function createEmptyAnalytics(): LocalGuardianAnalytics {
+function createEmptyAnalytics(): HushfernAnalytics {
   return {
     days: {},
     totals: { ...EMPTY_COUNTS },
@@ -253,7 +253,7 @@ function localHourKey(date = new Date()): string {
   return String(date.getHours()).padStart(2, '0');
 }
 
-function sanitizeAnalytics(value: unknown): LocalGuardianAnalytics {
+function sanitizeAnalytics(value: unknown): HushfernAnalytics {
   if (!isRecord(value)) return createEmptyAnalytics();
 
   const days: Record<string, AnalyticsDay> = {};
@@ -291,7 +291,7 @@ function sanitizeAnalytics(value: unknown): LocalGuardianAnalytics {
   return analytics;
 }
 
-function pruneAnalyticsDays(analytics: LocalGuardianAnalytics): void {
+function pruneAnalyticsDays(analytics: HushfernAnalytics): void {
   const cutoffDate = new Date();
   cutoffDate.setHours(0, 0, 0, 0);
   cutoffDate.setDate(cutoffDate.getDate() - (ANALYTICS_RETENTION_DAYS - 1));
@@ -319,7 +319,7 @@ function getSenderDomain(sender: chrome.runtime.MessageSender): string {
   }
 }
 
-async function getSettings(): Promise<LocalGuardianSettings> {
+async function getSettings(): Promise<HushfernSettings> {
   const stored = await chrome.storage.local.get(SETTINGS_STORAGE_KEY);
   return sanitizeSettings(stored[SETTINGS_STORAGE_KEY]);
 }
@@ -442,7 +442,7 @@ function recordAnalytics(delta: AnalyticsDelta): Promise<void> {
   });
 
   analyticsUpdateQueue = operation.catch((error) => {
-    console.error('[LocalGuardian BG] Analytics storage update failed:', error);
+    console.error('[Hushfern BG] Analytics storage update failed:', error);
   });
 
   return operation;
@@ -632,7 +632,7 @@ function scheduleOffscreenIdleClose(): void {
     if (activeOffscreenRequests > 0) return;
     void hasOffscreenDocument()
       .then((exists) => exists ? chrome.offscreen.closeDocument() : undefined)
-      .catch((error) => console.debug('[LocalGuardian BG] Offscreen idle cleanup skipped:', error));
+      .catch((error) => console.debug('[Hushfern BG] Offscreen idle cleanup skipped:', error));
   }, OFFSCREEN_IDLE_TIMEOUT_MS);
 }
 
@@ -748,8 +748,8 @@ async function updateBadge(tabId: number, toxicCount: number, enabled: boolean):
   await chrome.action.setTitle({
     tabId,
     title: shouldShow
-      ? `LocalGuardian: ${toxicCount} toxic block${toxicCount === 1 ? '' : 's'} on this page`
-      : 'LocalGuardian',
+      ? `Hushfern: ${toxicCount} toxic block${toxicCount === 1 ? '' : 's'} on this page`
+      : 'Hushfern',
   });
 
   if (shouldShow) {
@@ -767,7 +767,7 @@ async function analyzeBatch(message: Record<string, unknown>) {
   const results = scores.map(({ id, score }) => {
     const isToxic = score >= threshold;
     console.debug(
-      `[LocalGuardian BG] ${isToxic ? 'Flagged' : 'Analyzed'} ${id}: ${(score * 100).toFixed(2)}% (toxic)`,
+      `[Hushfern BG] ${isToxic ? 'Flagged' : 'Analyzed'} ${id}: ${(score * 100).toFixed(2)}% (toxic)`,
     );
     return { id, isToxic, score };
   });
@@ -810,16 +810,16 @@ function validatePageStats(value: unknown): {
 
 chrome.runtime.onInstalled.addListener(() => {
   void initializeStorageDefaults().catch((error) => {
-    console.error('[LocalGuardian BG] Failed to initialize storage defaults:', error);
+    console.error('[Hushfern BG] Failed to initialize storage defaults:', error);
   });
   // Start the large model download immediately after install/update. The
   // offscreen document acknowledges synchronously and owns the long-running
   // download, so this event does not depend on service-worker lifetime.
   void warmUpClassifier().catch((error) => {
-    console.error('[LocalGuardian BG] Classifier warm-up could not be started:', error);
+    console.error('[Hushfern BG] Classifier warm-up could not be started:', error);
   });
   void reinjectContentIntoOpenTabs().catch((error) => {
-    console.error('[LocalGuardian BG] Could not reconnect existing website tabs:', error);
+    console.error('[Hushfern BG] Could not reconnect existing website tabs:', error);
   });
 });
 
@@ -848,7 +848,7 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
 
     sendResponse({ ok: true });
     void deliverAnalysisResult(message).catch((error) => {
-      console.debug('[LocalGuardian BG] Analysis result could not be delivered:', error);
+      console.debug('[Hushfern BG] Analysis result could not be delivered:', error);
     });
     return false;
   }
@@ -875,7 +875,7 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
     // ANALYSIS_RESULT message and cannot produce an async channel-closed error.
     sendResponse({ ok: true });
     void queueAnalysisJob(message, sender).catch((error) => {
-      console.error('[LocalGuardian BG] Could not queue analysis:', error);
+      console.error('[Hushfern BG] Could not queue analysis:', error);
       void chrome.tabs.sendMessage(
         tabId as number,
         {
@@ -915,7 +915,7 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
     void ensureOffscreenDocument()
       .then(() => sendResponse({ ok: true }))
       .catch((error) => {
-        console.error('[LocalGuardian BG] Could not prepare the offscreen classifier:', error);
+        console.error('[Hushfern BG] Could not prepare the offscreen classifier:', error);
         sendResponse({
           ok: false,
           error: error instanceof Error ? error.message : 'The local classifier could not be prepared.',
@@ -940,7 +940,7 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
     })
       .then(() => sendResponse({ ok: true }))
       .catch((error) => {
-        console.error('[LocalGuardian BG] Could not record false positive:', error);
+        console.error('[Hushfern BG] Could not record false positive:', error);
         sendResponse({ ok: false, error: 'The false-positive event could not be saved.' });
       });
     return true;
@@ -980,7 +980,7 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
     })
       .then(() => sendResponse({ ok: true }))
       .catch((error) => {
-        console.error('[LocalGuardian BG] Could not record applied results:', error);
+        console.error('[Hushfern BG] Could not record applied results:', error);
         sendResponse({ ok: false, error: 'Applied result analytics could not be saved.' });
       });
     return true;
@@ -998,7 +998,7 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
       void updateBadge(tabId as number, stats.toxicCount, stats.enabled)
         .then(() => sendResponse({ ok: true }))
         .catch((error) => {
-          console.error('[LocalGuardian BG] Could not update action badge:', error);
+          console.error('[Hushfern BG] Could not update action badge:', error);
           sendResponse({ ok: false, error: 'The action badge could not be updated.' });
         });
       return true;
@@ -1021,6 +1021,6 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   if (changeInfo.status !== 'loading') return;
 
   void updateBadge(tabId, 0, false).catch((error) => {
-    console.error('[LocalGuardian BG] Could not clear action badge:', error);
+    console.error('[Hushfern BG] Could not clear action badge:', error);
   });
 });

@@ -148,7 +148,7 @@ async function getClassifier(): Promise<TextClassifier> {
 
   if (!classifierLoadPromise) {
     classifierLoadPromise = (async () => {
-      console.log('[LocalGuardian Offscreen] Initializing toxic-bert model...');
+      console.log('[Hushfern Offscreen] Initializing toxic-bert model...');
       const startTime = performance.now();
 
       let instance: TextClassifier;
@@ -159,17 +159,17 @@ async function getClassifier(): Promise<TextClassifier> {
           // WebGPU session creation can still fail after adapter discovery
           // (for example after a device loss). This is an expected fallback,
           // so avoid logging the caught Error object as an extension error.
-          console.info('[LocalGuardian Offscreen] WebGPU unavailable; using WASM.');
+          console.info('[Hushfern Offscreen] WebGPU unavailable; using WASM.');
           instance = await createClassifier('wasm');
         }
       } else {
-        console.info('[LocalGuardian Offscreen] No usable WebGPU adapter; using WASM.');
+        console.info('[Hushfern Offscreen] No usable WebGPU adapter; using WASM.');
         instance = await createClassifier('wasm');
       }
 
       classifierInstance = instance;
       console.log(
-        `[LocalGuardian Offscreen] Model loaded in ${(performance.now() - startTime).toFixed(2)}ms.`,
+        `[Hushfern Offscreen] Model loaded in ${(performance.now() - startTime).toFixed(2)}ms.`,
       );
       return instance;
     })().catch((error) => {
@@ -221,7 +221,7 @@ async function analyze(request: OffscreenAnalyzeRequest): Promise<OffscreenAnaly
     } catch (error) {
       // Omit failed IDs so the content script retains its existing retry path.
       // Never log page text; opaque IDs are sufficient for diagnostics.
-      console.error(`[LocalGuardian Offscreen] Classification failed for item ${item.id}:`, error);
+      console.error(`[Hushfern Offscreen] Classification failed for item ${item.id}:`, error);
     }
   }
 
@@ -283,10 +283,10 @@ function warmUpClassifier(sendResponse: (response?: unknown) => void): void {
   notifyBackground(OFFSCREEN_ACTIVITY_STARTED_TYPE);
   void getClassifier()
     .then(() => {
-      console.log('[LocalGuardian Offscreen] Classifier warm-up complete.');
+      console.log('[Hushfern Offscreen] Classifier warm-up complete.');
     })
     .catch((error) => {
-      console.error('[LocalGuardian Offscreen] Classifier warm-up failed:', error);
+      console.error('[Hushfern Offscreen] Classifier warm-up failed:', error);
     })
     .finally(() => {
       notifyBackground(OFFSCREEN_ACTIVITY_FINISHED_TYPE);
@@ -312,7 +312,7 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
   try {
     request = validateRequest(message);
   } catch (error) {
-    console.error('[LocalGuardian Offscreen] Rejected invalid analysis request:', error);
+    console.error('[Hushfern Offscreen] Rejected invalid analysis request:', error);
     sendResponse({
       type: OFFSCREEN_RESULT_TYPE,
       requestId: typeof message.requestId === 'string' ? message.requestId : '',
@@ -332,7 +332,7 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
       notifyBackground(OFFSCREEN_ACTIVITY_FINISHED_TYPE);
     })
     .catch((error) => {
-      console.error('[LocalGuardian Offscreen] Batch analysis failed:', error);
+      console.error('[Hushfern Offscreen] Batch analysis failed:', error);
       deliverAnalysisResult(request, {
         type: OFFSCREEN_RESULT_TYPE,
         requestId: request.requestId,

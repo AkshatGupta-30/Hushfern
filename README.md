@@ -1,6 +1,6 @@
-# LocalGuardian
+# Hushfern
 
-LocalGuardian is a Manifest V3 Chrome extension that classifies readable website text locally with `Xenova/toxic-bert` and softens content above your chosen toxicity threshold. The model begins downloading into Chrome's local cache as soon as the extension is installed or updated. After it has been cached, classification stays on the device; analyzed text is not sent to an application server.
+Hushfern is a Manifest V3 Chrome extension that creates a calmer layer for the web. It classifies readable website text locally with `Xenova/toxic-bert` and softens content above your chosen toxicity threshold. The model begins downloading into Chrome's local cache as soon as the extension is installed or updated. After it has been cached, classification stays on the device; analyzed text is not sent to an application server.
 
 ## Features
 
@@ -16,7 +16,7 @@ LocalGuardian is a Manifest V3 Chrome extension that classifies readable website
 ## Build and load
 
 Requires Node.js 20.19+ (or Node.js 22.12+).
-LocalGuardian requires Chrome 116 or newer.
+Hushfern requires Chrome 116 or newer.
 
 ```powershell
 yarn install
@@ -29,7 +29,7 @@ The first classification may take longer while the model assets are downloaded a
 
 ## Use
 
-1. Open any normal HTTP or HTTPS website, then open the LocalGuardian toolbar popup.
+1. Open any normal HTTP or HTTPS website, then open the Hushfern toolbar popup.
 2. Move either slider; settings are saved immediately and applied to the current page.
 3. Hover or focus a blurred paragraph to reveal it temporarily.
 4. Choose **False positive** to allow that exact text, or **Always show on this site** to allow the current domain.
@@ -38,7 +38,7 @@ The first classification may take longer while the model assets are downloaded a
 
 ## Website access
 
-LocalGuardian runs on every HTTP and HTTPS website. Chrome will therefore show the standard permission notice that the extension can read and change site content. Browser-owned pages such as `chrome://extensions`, the Chrome Web Store, and other protected URLs do not permit content-script injection and cannot be moderated by extensions.
+Hushfern runs on every HTTP and HTTPS website. Chrome will therefore show the standard permission notice that the extension can read and change site content. Browser-owned pages such as `chrome://extensions`, the Chrome Web Store, and other protected URLs do not permit content-script injection and cannot be moderated by extensions.
 
 ## Development
 
