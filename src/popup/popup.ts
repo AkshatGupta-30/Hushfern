@@ -4,11 +4,13 @@ const SETTINGS_KEY = 'localGuardianSettings'
 const DEFAULT_SETTINGS: LocalGuardianSettings = {
   toxicityThreshold: 50,
   blurIntensity: 8,
+  keepHiddenOnHover: true,
 }
 
 interface LocalGuardianSettings {
   toxicityThreshold: number
   blurIntensity: number
+  keepHiddenOnHover: boolean
 }
 
 interface PageStats {
@@ -22,8 +24,10 @@ type ActivityState = 'loading' | 'active' | 'disabled' | 'unsupported' | 'unavai
 
 const toxicityInput = requireElement<HTMLInputElement>('toxicityThreshold')
 const blurInput = requireElement<HTMLInputElement>('blurIntensity')
+const keepHiddenOnHoverInput = requireElement<HTMLInputElement>('keepHiddenOnHover')
 const toxicityValue = requireElement<HTMLOutputElement>('toxicityValue')
 const blurValue = requireElement<HTMLOutputElement>('blurValue')
+const blurHint = requireElement<HTMLElement>('blurHint')
 const settingsStatus = requireElement<HTMLElement>('settingsStatus')
 const pageActivity = requireElement<HTMLElement>('pageActivity')
 const pageStatus = requireElement<HTMLElement>('pageStatus')
@@ -60,6 +64,7 @@ function normalizeSettings(value: unknown): LocalGuardianSettings {
   return {
     toxicityThreshold: clampInteger(stored.toxicityThreshold, 40, 80, DEFAULT_SETTINGS.toxicityThreshold),
     blurIntensity: clampInteger(stored.blurIntensity, 3, 10, DEFAULT_SETTINGS.blurIntensity),
+    keepHiddenOnHover: stored.keepHiddenOnHover === true,
   }
 }
 
@@ -101,12 +106,16 @@ function renderSettings(settings: LocalGuardianSettings): void {
   currentSettings = settings
   toxicityInput.value = String(settings.toxicityThreshold)
   blurInput.value = String(settings.blurIntensity)
+  keepHiddenOnHoverInput.checked = settings.keepHiddenOnHover
   toxicityValue.value = `${settings.toxicityThreshold}%`
   toxicityValue.textContent = `${settings.toxicityThreshold}%`
   toxicityInput.setAttribute('aria-valuetext', `${settings.toxicityThreshold} percent`)
   blurValue.value = `${settings.blurIntensity}px`
   blurValue.textContent = `${settings.blurIntensity}px`
   blurInput.setAttribute('aria-valuetext', `${settings.blurIntensity} pixels`)
+  blurHint.textContent = settings.keepHiddenOnHover
+    ? 'Hovering stays blurred. Keyboard focus can still reveal it.'
+    : 'Hovering a hidden block still reveals it.'
   updateRangeTrack(toxicityInput)
   updateRangeTrack(blurInput)
 }
@@ -174,6 +183,11 @@ function handleBlurInput(): void {
   blurValue.textContent = `${currentSettings.blurIntensity}px`
   blurInput.setAttribute('aria-valuetext', `${currentSettings.blurIntensity} pixels`)
   updateRangeTrack(blurInput)
+  persistSettings()
+}
+
+function handleKeepHiddenOnHoverChange(): void {
+  currentSettings.keepHiddenOnHover = keepHiddenOnHoverInput.checked
   persistSettings()
 }
 
@@ -351,6 +365,7 @@ toxicityInput.addEventListener('input', handleThresholdInput)
 blurInput.addEventListener('input', handleBlurInput)
 toxicityInput.addEventListener('change', () => persistSettings())
 blurInput.addEventListener('change', () => persistSettings())
+keepHiddenOnHoverInput.addEventListener('change', handleKeepHiddenOnHoverChange)
 refreshButton.addEventListener('click', () => void refreshPageStats())
 analyticsButton.addEventListener('click', () => {
   void chrome.tabs.create({ url: chrome.runtime.getURL('analytics.html') })

@@ -361,6 +361,21 @@ $analytics-panels: ".history-section", ".domains-section", ".exceptions-section"
   scrollbar-color: color-var(text-subtle) transparent;
 }
 
+.chart-tooltip {
+  position: fixed;
+  z-index: 30;
+  max-width: min(280px, calc(100vw - 20px));
+  padding: 9px 11px;
+  border-radius: radius(sm);
+  background: color-var(surface-raised);
+  box-shadow: 0 5px 12px rgb(7 12 17 / 42%);
+  color: color-var(text);
+  font-size: 0.7rem;
+  font-weight: 650;
+  line-height: 1.4;
+  pointer-events: none;
+}
+
 .bar-chart {
   @include recessed;
   display: grid;
@@ -380,6 +395,12 @@ $analytics-panels: ".history-section", ".domains-section", ".exceptions-section"
   grid-template-columns: minmax(3px, 1fr) minmax(3px, 1fr);
   align-items: end;
   gap: 2px;
+  cursor: help;
+
+  &:focus-visible {
+    outline: 2px solid color-var(accent-strong);
+    outline-offset: 3px;
+  }
 
   &::after {
     position: absolute;

@@ -18,6 +18,7 @@ const OFFSCREEN_IDLE_TIMEOUT_MS = 5 * 60_000;
 const DEFAULT_SETTINGS = {
   toxicityThreshold: 50,
   blurIntensity: 8,
+  keepHiddenOnHover: true,
 };
 
 const DEFAULT_WHITELIST = {
@@ -40,6 +41,7 @@ interface AnalyticsCounts {
 
 interface AnalyticsDay extends AnalyticsCounts {
   domains: Record<string, AnalyticsCounts>;
+  hours: Record<string, AnalyticsCounts>;
 }
 
 interface LocalGuardianAnalytics {
@@ -122,6 +124,7 @@ function sanitizeSettings(value: unknown): LocalGuardianSettings {
   return {
     toxicityThreshold: sanitizedInteger(settings.toxicityThreshold, 40, 80, DEFAULT_SETTINGS.toxicityThreshold),
     blurIntensity: sanitizedInteger(settings.blurIntensity, 3, 10, DEFAULT_SETTINGS.blurIntensity),
+    keepHiddenOnHover: settings.keepHiddenOnHover === true,
   };
 }
 
@@ -246,6 +249,10 @@ function localDateKey(date = new Date()): string {
   return `${year}-${month}-${day}`;
 }
 
+function localHourKey(date = new Date()): string {
+  return String(date.getHours()).padStart(2, '0');
+}
+
 function sanitizeAnalytics(value: unknown): LocalGuardianAnalytics {
   if (!isRecord(value)) return createEmptyAnalytics();
 
@@ -257,6 +264,7 @@ function sanitizeAnalytics(value: unknown): LocalGuardianAnalytics {
 
     const counts = sanitizeCounts(rawDay);
     const domains: Record<string, AnalyticsCounts> = {};
+    const hours: Record<string, AnalyticsCounts> = {};
     const rawDomains = isRecord(rawDay.domains) ? rawDay.domains : {};
 
     for (const [domain, rawCounts] of Object.entries(rawDomains)) {
@@ -264,7 +272,13 @@ function sanitizeAnalytics(value: unknown): LocalGuardianAnalytics {
       setOwn(domains, domain, sanitizeCounts(rawCounts));
     }
 
-    setOwn(days, date, { ...counts, domains });
+    const rawHours = isRecord(rawDay.hours) ? rawDay.hours : {};
+    for (const [hour, rawCounts] of Object.entries(rawHours)) {
+      if (!/^(?:0\d|1\d|2[0-3])$/.test(hour)) continue;
+      setOwn(hours, hour, sanitizeCounts(rawCounts));
+    }
+
+    setOwn(days, date, { ...counts, domains, hours });
   }
 
   const analytics = {
@@ -333,6 +347,10 @@ async function initializeStorageDefaults(): Promise<void> {
       settingsWithDefaults.blurIntensity = DEFAULT_SETTINGS.blurIntensity;
       changed = true;
     }
+    if (!hasOwn(rawSettings, 'keepHiddenOnHover')) {
+      settingsWithDefaults.keepHiddenOnHover = DEFAULT_SETTINGS.keepHiddenOnHover;
+      changed = true;
+    }
     if (changed) updates[SETTINGS_STORAGE_KEY] = settingsWithDefaults;
   }
 
@@ -388,13 +406,22 @@ function recordAnalytics(delta: AnalyticsDelta): Promise<void> {
     const today = localDateKey();
 
     if (!hasOwn(analytics.days as unknown as Record<string, unknown>, today)) {
-      setOwn(analytics.days, today, { ...EMPTY_COUNTS, domains: {} });
+      setOwn(analytics.days, today, { ...EMPTY_COUNTS, domains: {}, hours: {} });
     }
 
     const day = analytics.days[today];
     day.analyzed += delta.analyzed;
     day.toxic += delta.toxic;
     day.falsePositives += delta.falsePositives;
+
+    const hour = localHourKey();
+    if (!hasOwn(day.hours as unknown as Record<string, unknown>, hour)) {
+      setOwn(day.hours, hour, { ...EMPTY_COUNTS });
+    }
+    const hourly = day.hours[hour];
+    hourly.analyzed += delta.analyzed;
+    hourly.toxic += delta.toxic;
+    hourly.falsePositives += delta.falsePositives;
 
     if (!hasOwn(day.domains as unknown as Record<string, unknown>, delta.domain)) {
       setOwn(day.domains, delta.domain, { ...EMPTY_COUNTS });

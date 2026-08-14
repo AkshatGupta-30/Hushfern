@@ -11,14 +11,16 @@ $activity-tones: (
 .popup-page {
   width: 380px;
   min-width: 380px;
-  min-height: 580px;
   overflow-x: hidden;
 }
 
 .popup-shell {
-  min-height: 580px;
-  padding: 10px 16px;
+  padding: 14px 18px 16px;
   background: color-var(bg);
+}
+
+.popup-page .section-label {
+  display: none;
 }
 
 .brand-header {
@@ -26,12 +28,14 @@ $activity-tones: (
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 0 2px 12px;
+  padding: 0 0 16px;
 
   .brand-mark {
-    width: 36px;
-    height: 36px;
-    border-radius: radius(md);
+    width: 32px;
+    height: 32px;
+    border-radius: radius(sm);
+    background: transparent;
+    box-shadow: none;
   }
 
   h1 {
@@ -50,19 +54,25 @@ $activity-tones: (
 }
 
 .icon-button {
-  @include pressable;
-  min-width: 72px;
+  min-width: 68px;
   min-height: 38px;
   padding: 0 13px;
+  border: 0;
+  border-radius: radius(sm);
+  background: color-var(surface-raised);
+  box-shadow: none;
   color: color-var(text-muted);
   font-size: 0.7rem;
   font-weight: 720;
 
   &:hover {
+    background: color-var(surface);
     color: color-var(text);
-    box-shadow:
-      -4px -4px 9px color-var(edge-light),
-      5px 5px 11px color-var(edge-dark);
+  }
+
+  &:active {
+    background: color-var(surface-pressed);
+    transform: none;
   }
 
   &:disabled {
@@ -73,23 +83,12 @@ $activity-tones: (
 
 .page-activity,
 .controls {
-  @include panel;
+  background: transparent;
+  box-shadow: none;
 }
 
 .page-activity {
-  position: relative;
-  padding: 12px 14px;
-
-  &::before {
-    position: absolute;
-    top: 12px;
-    left: 0;
-    width: 3px;
-    height: 42px;
-    border-radius: 0 radius(xs) radius(xs) 0;
-    background: color-var(text-subtle);
-    content: "";
-  }
+  padding: 0 0 16px;
 
   @each $state, $tone in $activity-tones {
     &[data-state="#{$state}"] {
@@ -97,14 +96,6 @@ $activity-tones: (
 
       @if $state == active {
         $text-tone: accent-strong;
-      }
-
-      &::before {
-        background: color-var($tone);
-
-        @if $state == active {
-          box-shadow: 0 0 10px rgb(117 214 197 / 38%);
-        }
       }
 
       .status-badge {
@@ -124,31 +115,34 @@ $activity-tones: (
 .activity-heading h2,
 .controls h2 {
   margin: 0;
-  font-size: 0.94rem;
-  font-weight: 690;
+  font-size: 0.92rem;
+  font-weight: 700;
   line-height: 1.3;
   letter-spacing: -0.015em;
 }
 
 .status-badge {
-  @include recessed(small);
   flex: 0 0 auto;
-  padding: 6px 9px;
-  border-radius: radius(sm);
+  padding: 3px 0;
   color: color-var(text-muted);
-  font-size: 0.65rem;
+  font-size: 0.68rem;
   font-weight: 760;
 }
 
 .activity-counts {
-  @include recessed;
   display: grid;
   grid-template-columns: 1fr auto;
   align-items: end;
   gap: 14px;
-  margin: 11px 0 8px;
-  padding: 8px 11px;
-  border-radius: radius(md);
+  margin: 16px 0 10px;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.page-activity:not([data-state="active"]) .activity-counts {
+  display: none;
 }
 
 .count-primary,
@@ -169,12 +163,12 @@ $activity-tones: (
 
 .count-primary strong {
   color: color-var(accent-strong);
-  font-size: 1.8rem;
-  letter-spacing: -0.07em;
+  font-size: 1.55rem;
+  letter-spacing: -0.05em;
 }
 
 .count-secondary {
-  padding-left: 16px;
+  padding-left: 12px;
   border-left: 1px solid color-var(divider);
   text-align: right;
 
@@ -217,14 +211,15 @@ $activity-tones: (
 }
 
 .controls {
-  margin-top: 13px;
-  padding: 12px 14px;
+  margin-top: 0;
+  padding: 16px 0 0;
+  border-top: 1px solid color-var(divider);
 }
 
 .save-status {
   flex: 0 0 auto;
   margin-top: 2px;
-  color: color-var(success);
+  color: color-var(text-subtle);
   font-size: 0.65rem;
   font-weight: 650;
 
@@ -238,9 +233,15 @@ $activity-tones: (
 }
 
 .range-control {
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid color-var(divider);
+  margin-top: 15px;
+  padding-top: 0;
+  border-top: 0;
+
+  + .range-control {
+    margin-top: 17px;
+    padding-top: 14px;
+    border-top: 1px solid color-var(divider);
+  }
 }
 
 .range-label-row,
@@ -259,10 +260,11 @@ $activity-tones: (
   }
 
   output {
-    @include recessed(small);
-    min-width: 50px;
-    padding: 5px 8px;
-    border-radius: radius(sm);
+    min-width: 0;
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
     color: color-var(accent-strong);
     font-family: $font-mono;
     font-size: 0.72rem;
@@ -273,7 +275,7 @@ $activity-tones: (
 
 input[type="range"] {
   width: 100%;
-  height: 20px;
+  height: 18px;
   margin: 8px 0 1px;
   padding: 0;
   appearance: none;
@@ -281,7 +283,7 @@ input[type="range"] {
   cursor: pointer;
 
   &::-webkit-slider-runnable-track {
-    height: 7px;
+    height: 5px;
     border-radius: radius(sm);
     background: linear-gradient(
       to right,
@@ -290,42 +292,40 @@ input[type="range"] {
       color-var(surface-pressed) var(--range-progress, 50%),
       color-var(surface-pressed) 100%
     );
-    box-shadow: var(--shadow-pressed-small);
+    box-shadow: none;
   }
 
   &::-webkit-slider-thumb {
-    width: 19px;
-    height: 19px;
-    margin-top: -6px;
+    width: 16px;
+    height: 16px;
+    margin-top: -5px;
     appearance: none;
-    border: 4px solid color-var(surface-raised);
+    border: 3px solid color-var(surface-raised);
     border-radius: radius(round);
     background: color-var(accent-strong);
-    box-shadow:
-      -2px -2px 4px color-var(edge-light),
-      3px 3px 6px color-var(edge-dark);
+    box-shadow: 0 1px 3px color-var(edge-dark);
   }
 
   &::-moz-range-track {
-    height: 7px;
+    height: 5px;
     border-radius: radius(sm);
     background: color-var(surface-pressed);
-    box-shadow: var(--shadow-pressed-small);
+    box-shadow: none;
   }
 
   &::-moz-range-progress {
-    height: 7px;
+    height: 5px;
     border-radius: radius(sm);
     background: color-var(accent);
   }
 
   &::-moz-range-thumb {
-    width: 12px;
-    height: 12px;
-    border: 4px solid color-var(surface-raised);
+    width: 10px;
+    height: 10px;
+    border: 3px solid color-var(surface-raised);
     border-radius: radius(round);
     background: color-var(accent-strong);
-    box-shadow: var(--shadow-raised-small);
+    box-shadow: 0 1px 3px color-var(edge-dark);
   }
 }
 
@@ -342,8 +342,67 @@ input[type="range"] {
   line-height: 1.4;
 }
 
+.toggle-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 17px;
+  padding-top: 14px;
+  border-top: 1px solid color-var(divider);
+
+  label {
+    color: color-var(text);
+    font-size: 0.78rem;
+    font-weight: 650;
+  }
+
+  p {
+    margin: 4px 0 0;
+    color: color-var(text-subtle);
+    font-size: 0.63rem;
+    line-height: 1.4;
+  }
+
+  input {
+    width: 38px;
+    height: 22px;
+    flex: 0 0 auto;
+    margin: 0;
+    appearance: none;
+    border: 0;
+    border-radius: radius(round);
+    background: color-var(surface-pressed);
+    box-shadow: inset 0 0 0 1px color-var(divider);
+    cursor: pointer;
+    transition: background-color $motion-fast;
+
+    &::after {
+      display: block;
+      width: 16px;
+      height: 16px;
+      margin: 3px;
+      border-radius: radius(round);
+      background: color-var(text-subtle);
+      box-shadow: 0 1px 3px color-var(edge-dark);
+      content: "";
+      transition: transform $motion-fast, background-color $motion-fast;
+    }
+
+    &:checked {
+      background: color-var(accent);
+
+      &::after {
+        background: color-var(accent-ink);
+        transform: translateX(16px);
+      }
+    }
+  }
+}
+
 .popup-footer {
-  padding-top: 10px;
+  padding-top: 16px;
+  border-top: 1px solid color-var(divider);
 
   p {
     margin: 6px 8px 0;
@@ -357,17 +416,15 @@ input[type="range"] {
 .analytics-button {
   display: flex;
   width: 100%;
-  min-height: 42px;
+  min-height: 40px;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
   padding: 0 15px;
   border: 0;
-  border-radius: radius(md);
+  border-radius: radius(sm);
   background: color-var(accent);
-  box-shadow:
-    -4px -4px 9px rgb(109 144 148 / 42%),
-    5px 5px 11px color-var(edge-dark);
+  box-shadow: none;
   color: color-var(accent-ink);
   cursor: pointer;
   font-size: 0.77rem;
@@ -378,9 +435,8 @@ input[type="range"] {
   }
 
   &:active {
-    box-shadow:
-      inset 3px 3px 6px rgb(16 42 41 / 35%),
-      inset -3px -3px 6px rgb(225 255 247 / 28%);
+    background: #63c5b5;
+    transform: none;
   }
 
   span:last-child {

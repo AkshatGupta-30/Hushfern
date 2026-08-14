@@ -9,6 +9,7 @@ const PING_CONTENT_TYPE = 'PING_CONTENT';
 const DEFAULT_SETTINGS: LocalGuardianSettings = {
   toxicityThreshold: 50,
   blurIntensity: 8,
+  keepHiddenOnHover: true,
 };
 
 const COMMENT_CONTAINER_SELECTOR = [
@@ -91,6 +92,7 @@ const HOSTNAME = window.location.hostname.trim().toLowerCase();
 interface LocalGuardianSettings {
   toxicityThreshold: number;
   blurIntensity: number;
+  keepHiddenOnHover: boolean;
 }
 
 interface WhitelistTextEntry {
@@ -146,7 +148,6 @@ interface AnalysisRecord {
   originalTabIndex: string | null;
   hiddenContent: HiddenContentPart[];
   disclosure: HTMLElement | null;
-  feedback: HTMLElement | null;
 }
 
 interface PageStats {
@@ -167,7 +168,6 @@ interface PendingAnalysis {
 const processedNodes = new WeakSet<HTMLElement>();
 const allowedTextByElement = new WeakMap<HTMLElement, string>();
 const recordsByElement = new WeakMap<HTMLElement, AnalysisRecord>();
-const recordsByFeedback = new WeakMap<HTMLElement, AnalysisRecord>();
 const trackedRecords = new Set<AnalysisRecord>();
 const internallyMutatingElements = new WeakSet<HTMLElement>();
 
@@ -192,6 +192,7 @@ function normalizeSettings(value: unknown): LocalGuardianSettings {
   return {
     toxicityThreshold: clampInteger(candidate.toxicityThreshold, 40, 80, DEFAULT_SETTINGS.toxicityThreshold),
     blurIntensity: clampInteger(candidate.blurIntensity, 3, 10, DEFAULT_SETTINGS.blurIntensity),
+    keepHiddenOnHover: candidate.keepHiddenOnHover === true,
   };
 }
 
@@ -299,7 +300,8 @@ function injectStyles(): void {
       transition: filter 180ms cubic-bezier(0.16, 1, 0.3, 1) !important;
     }
 
-    .localguardian-blur:is(:hover, :focus, :focus-within),
+    .localguardian-blur:not(.localguardian-hover-locked):hover,
+    .localguardian-blur:is(:focus, :focus-within),
     .localguardian-blur.localguardian-revealed {
       filter: blur(0) !important;
       z-index: 2 !important;
@@ -310,84 +312,7 @@ function injectStyles(): void {
       outline-offset: 3px !important;
     }
 
-    .localguardian-feedback {
-      all: initial !important;
-      position: fixed !important;
-      inset: auto !important;
-      z-index: 2147483000 !important;
-      display: inline-flex !important;
-      align-items: center !important;
-      gap: 4px !important;
-      width: max-content !important;
-      max-width: min(360px, calc(100vw - 24px)) !important;
-      padding: 4px !important;
-      border: 1px solid #47637c !important;
-      border-radius: 8px !important;
-      background: #0b1725 !important;
-      box-shadow: 0 4px 8px rgb(0 0 0 / 28%) !important;
-      opacity: 0 !important;
-      visibility: hidden !important;
-      pointer-events: none !important;
-      transform: translateY(2px) !important;
-      transition:
-        opacity 160ms cubic-bezier(0.16, 1, 0.3, 1),
-        transform 160ms cubic-bezier(0.16, 1, 0.3, 1),
-        visibility 160ms step-end !important;
-    }
-
-    .localguardian-feedback[data-open="true"] {
-      opacity: 1 !important;
-      visibility: visible !important;
-      pointer-events: auto !important;
-      transform: translateY(0) !important;
-      transition:
-        opacity 160ms cubic-bezier(0.16, 1, 0.3, 1),
-        transform 160ms cubic-bezier(0.16, 1, 0.3, 1),
-        visibility 0ms step-start !important;
-    }
-
-    .localguardian-feedback__button {
-      all: unset !important;
-      box-sizing: border-box !important;
-      min-height: 36px !important;
-      padding: 7px 9px !important;
-      border-radius: 6px !important;
-      color: #dcecf5 !important;
-      cursor: pointer !important;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
-      font-size: 11px !important;
-      font-weight: 650 !important;
-      line-height: 1.2 !important;
-      white-space: nowrap !important;
-    }
-
-    .localguardian-feedback__button:hover {
-      background: #193149 !important;
-      color: #ffffff !important;
-    }
-
-    .localguardian-feedback__button--primary {
-      background: #55d5e8 !important;
-      color: #06222a !important;
-    }
-
-    .localguardian-feedback__button--primary:hover {
-      background: #74e4f1 !important;
-      color: #06222a !important;
-    }
-
-    .localguardian-feedback__button:focus-visible {
-      outline: 2px solid #74e4f1 !important;
-      outline-offset: 2px !important;
-    }
-
-    .localguardian-feedback__button:disabled {
-      cursor: wait !important;
-      opacity: 0.7 !important;
-    }
-
-    .localguardian-a11y-disclosure,
-    .localguardian-feedback__status {
+    .localguardian-a11y-disclosure {
       position: absolute !important;
       width: 1px !important;
       height: 1px !important;
@@ -399,17 +324,8 @@ function injectStyles(): void {
     }
 
     @media (prefers-reduced-motion: reduce) {
-      .localguardian-blur,
-      .localguardian-feedback {
+      .localguardian-blur {
         transition-duration: 0.01ms !important;
-      }
-    }
-
-    @media (forced-colors: active) {
-      .localguardian-feedback,
-      .localguardian-feedback__button {
-        border: 1px solid ButtonText !important;
-        forced-color-adjust: auto !important;
       }
     }
   `;
@@ -720,159 +636,48 @@ function restoreRawContent(record: AnalysisRecord): void {
   record.hiddenContent = [];
 }
 
-function positionFeedback(record: AnalysisRecord): void {
-  const feedback = record.feedback;
-  if (!feedback || !record.flagged || !document.body.contains(record.element)) return;
-
-  const targetRect = record.element.getBoundingClientRect();
-  if (targetRect.bottom < 0 || targetRect.top > window.innerHeight) {
-    hideFeedback(record);
-    return;
-  }
-
-  const viewportPadding = 8;
-  const gap = 6;
-  const feedbackRect = feedback.getBoundingClientRect();
-  const availableWidth = Math.max(0, window.innerWidth - viewportPadding * 2);
-  const width = Math.min(feedbackRect.width, availableWidth);
-  const left = Math.min(
-    Math.max(viewportPadding, targetRect.right - width),
-    Math.max(viewportPadding, window.innerWidth - width - viewportPadding),
-  );
-  const below = targetRect.bottom + gap;
-  const top = below + feedbackRect.height <= window.innerHeight - viewportPadding
-    ? below
-    : Math.max(viewportPadding, targetRect.top - feedbackRect.height - gap);
-
-  feedback.style.setProperty('left', `${Math.round(left)}px`, 'important');
-  feedback.style.setProperty('top', `${Math.round(top)}px`, 'important');
+function createDisclosure(record: AnalysisRecord): HTMLElement {
+  const disclosure = document.createElement('span');
+  disclosure.className = 'localguardian-a11y-disclosure';
+  disclosure.dataset.localguardianUi = 'true';
+  disclosure.textContent = settings.keepHiddenOnHover
+    ? `LocalGuardian hid potentially toxic text at ${Math.round(record.score * 100)} percent. Focus this block to reveal it.`
+    : `LocalGuardian hid potentially toxic text at ${Math.round(record.score * 100)} percent. Hover or focus this block to reveal it.`;
+  return disclosure;
 }
 
-function showFeedback(record: AnalysisRecord): void {
-  if (!record.flagged || !record.feedback) return;
+function recordForRevealTarget(target: EventTarget | null): AnalysisRecord | null {
+  return target instanceof HTMLElement ? recordsByElement.get(target) ?? null : null;
+}
+
+function revealRecord(record: AnalysisRecord): void {
+  if (!record.flagged) return;
   record.element.classList.add('localguardian-revealed');
   setRawContentHidden(record, false);
-  positionFeedback(record);
-  record.feedback.dataset.open = 'true';
-  record.feedback.setAttribute('aria-hidden', 'false');
-  record.feedback.inert = false;
 }
 
-function hideFeedback(record: AnalysisRecord): void {
-  if (!record.feedback) return;
-  record.feedback.dataset.open = 'false';
-  record.feedback.setAttribute('aria-hidden', 'true');
-  record.feedback.inert = true;
+function concealRecord(record: AnalysisRecord): void {
+  if (!record.flagged) return;
   record.element.classList.remove('localguardian-revealed');
   setRawContentHidden(record, true);
 }
 
-function recordForRevealTarget(target: EventTarget | null): AnalysisRecord | null {
-  if (!(target instanceof HTMLElement)) return null;
-  return recordsByElement.get(target) ?? recordsByFeedback.get(target) ?? null;
-}
-
 function beginReveal(event: Event): void {
   const record = recordForRevealTarget(event.currentTarget);
-  if (record) showFeedback(record);
+  if (!record || (event.type === 'mouseenter' && settings.keepHiddenOnHover)) return;
+  revealRecord(record);
 }
 
 function endReveal(event: Event): void {
   const record = recordForRevealTarget(event.currentTarget);
   if (!record) return;
 
-  // Give the pointer/focus time to cross the small portal gap before deciding
-  // that neither the content nor its controls remain engaged.
   setTimeout(() => {
-    if (!record.flagged || !record.feedback) return;
-    const remainsOpen =
-      record.element.matches(':hover, :focus-within') ||
-      record.feedback.matches(':hover, :focus-within');
-    if (remainsOpen) showFeedback(record);
-    else hideFeedback(record);
-  }, 80);
-}
-
-let feedbackLayoutFrame: number | null = null;
-function scheduleFeedbackLayout(): void {
-  if (feedbackLayoutFrame !== null) return;
-  feedbackLayoutFrame = requestAnimationFrame(() => {
-    feedbackLayoutFrame = null;
-    for (const record of trackedRecords) {
-      if (record.feedback?.dataset.open === 'true') positionFeedback(record);
-    }
-  });
-}
-
-function dismissFeedbackOutside(event: PointerEvent): void {
-  const target = event.target;
-  if (!(target instanceof Node)) return;
-
-  for (const record of trackedRecords) {
-    if (record.feedback?.dataset.open !== 'true') continue;
-    if (record.element.contains(target) || record.feedback.contains(target)) continue;
-
-    const activeElement = document.activeElement;
-    if (
-      activeElement instanceof HTMLElement &&
-      (record.element.contains(activeElement) || record.feedback.contains(activeElement))
-    ) {
-      activeElement.blur();
-    }
-    hideFeedback(record);
-  }
-}
-
-function createDisclosure(record: AnalysisRecord): HTMLElement {
-  const disclosure = document.createElement('span');
-  disclosure.className = 'localguardian-a11y-disclosure';
-  disclosure.dataset.localguardianUi = 'true';
-  disclosure.textContent = `LocalGuardian hid potentially toxic text at ${Math.round(record.score * 100)} percent. Focus this block to reveal it.`;
-  return disclosure;
-}
-
-function createFeedback(record: AnalysisRecord): HTMLElement {
-  const feedback = document.createElement('span');
-  feedback.className = 'localguardian-feedback';
-  feedback.dataset.localguardianUi = 'true';
-  feedback.dataset.open = 'false';
-  feedback.setAttribute('role', 'group');
-  feedback.setAttribute('aria-label', 'LocalGuardian reveal controls');
-  feedback.setAttribute('aria-hidden', 'true');
-  feedback.inert = true;
-
-  const status = document.createElement('span');
-  status.className = 'localguardian-feedback__status';
-  status.dataset.localguardianUi = 'true';
-  status.textContent = `LocalGuardian hid this text with a toxicity score of ${Math.round(record.score * 100)} percent.`;
-
-  const falsePositiveButton = document.createElement('button');
-  falsePositiveButton.type = 'button';
-  falsePositiveButton.className = 'localguardian-feedback__button';
-  falsePositiveButton.dataset.localguardianUi = 'true';
-  falsePositiveButton.textContent = 'Report false positive';
-  falsePositiveButton.addEventListener('click', (event) => {
-    event.stopPropagation();
-    void whitelistText(record, falsePositiveButton, domainButton);
-  });
-
-  const domainButton = document.createElement('button');
-  domainButton.type = 'button';
-  domainButton.className = 'localguardian-feedback__button localguardian-feedback__button--primary';
-  domainButton.dataset.localguardianUi = 'true';
-  domainButton.textContent = 'Always show on this site';
-  domainButton.addEventListener('click', (event) => {
-    event.stopPropagation();
-    void whitelistDomain(record, falsePositiveButton, domainButton);
-  });
-
-  feedback.append(status, falsePositiveButton, domainButton);
-  recordsByFeedback.set(feedback, record);
-  feedback.addEventListener('mouseenter', beginReveal);
-  feedback.addEventListener('mouseleave', endReveal);
-  feedback.addEventListener('focusin', beginReveal);
-  feedback.addEventListener('focusout', endReveal);
-  return feedback;
+    if (!record.flagged) return;
+    const remainsRevealed = record.element.matches(':focus, :focus-within') ||
+      (!settings.keepHiddenOnHover && record.element.matches(':hover'));
+    if (!remainsRevealed) concealRecord(record);
+  }, 0);
 }
 
 function flagRecord(record: AnalysisRecord): void {
@@ -881,18 +686,14 @@ function flagRecord(record: AnalysisRecord): void {
   record.flagged = true;
   markInternalMutation(record.element);
   record.element.classList.add('localguardian-blur');
+  record.element.classList.toggle('localguardian-hover-locked', settings.keepHiddenOnHover);
   record.element.style.setProperty('--localguardian-blur-radius', `${settings.blurIntensity}px`);
-  // A native title tooltip obscures the compact action panel on hover. The
-  // dedicated disclosure and feedback group provide the same context without
-  // competing browser chrome.
   record.element.removeAttribute('title');
   if (record.element.tabIndex < 0) record.element.tabIndex = 0;
 
   record.hiddenContent = hideRawContent(record);
   record.disclosure = createDisclosure(record);
-  record.feedback = createFeedback(record);
   record.element.append(record.disclosure);
-  document.body.append(record.feedback);
   record.element.addEventListener('mouseenter', beginReveal);
   record.element.addEventListener('mouseleave', endReveal);
   record.element.addEventListener('focusin', beginReveal);
@@ -900,10 +701,10 @@ function flagRecord(record: AnalysisRecord): void {
 }
 
 function unflagRecord(record: AnalysisRecord): void {
-  if (!record.flagged && !record.feedback && !record.disclosure && record.hiddenContent.length === 0) return;
+  if (!record.flagged && !record.disclosure && record.hiddenContent.length === 0) return;
 
   record.flagged = false;
-  record.element.classList.remove('localguardian-blur', 'localguardian-revealed');
+  record.element.classList.remove('localguardian-blur', 'localguardian-revealed', 'localguardian-hover-locked');
   record.element.style.removeProperty('--localguardian-blur-radius');
   record.element.removeEventListener('mouseenter', beginReveal);
   record.element.removeEventListener('mouseleave', endReveal);
@@ -912,8 +713,6 @@ function unflagRecord(record: AnalysisRecord): void {
   markInternalMutation(record.element);
   record.disclosure?.remove();
   record.disclosure = null;
-  record.feedback?.remove();
-  record.feedback = null;
   restoreRawContent(record);
 
   if (record.originalTitle === null) record.element.removeAttribute('title');
@@ -963,7 +762,6 @@ function registerResult(item: QueueItem, result: AnalysisResult): boolean | null
     originalTabIndex: item.element.getAttribute('tabindex'),
     hiddenContent: [],
     disclosure: null,
-    feedback: null,
   };
 
   recordsByElement.set(item.element, record);
@@ -1093,31 +891,6 @@ function pruneDetachedRecords(): void {
   });
 }
 
-function restoreFocus(element: HTMLElement): void {
-  const previousTabIndex = element.getAttribute('tabindex');
-  element.setAttribute('tabindex', '-1');
-  element.focus({ preventScroll: true });
-  element.addEventListener(
-    'blur',
-    () => {
-      if (previousTabIndex === null) element.removeAttribute('tabindex');
-      else element.setAttribute('tabindex', previousTabIndex);
-    },
-    { once: true },
-  );
-}
-
-function announceAction(message: string): void {
-  const status = document.createElement('span');
-  status.dataset.localguardianUi = 'true';
-  status.setAttribute('role', 'status');
-  status.setAttribute('aria-live', 'polite');
-  status.className = 'localguardian-feedback__status';
-  status.textContent = message;
-  document.body.append(status);
-  setTimeout(() => status.remove(), 2000);
-}
-
 function currentStats(): PageStats {
   pruneDetachedRecords();
   let analyzedCount = 0;
@@ -1150,72 +923,16 @@ function updateAllRecords(): void {
   for (const record of trackedRecords) {
     if (record.flagged) {
       record.element.style.setProperty('--localguardian-blur-radius', `${settings.blurIntensity}px`);
+      record.element.classList.toggle('localguardian-hover-locked', settings.keepHiddenOnHover);
+      if (record.disclosure) {
+        record.disclosure.textContent = settings.keepHiddenOnHover
+          ? `LocalGuardian hid potentially toxic text at ${Math.round(record.score * 100)} percent. Focus this block to reveal it.`
+          : `LocalGuardian hid potentially toxic text at ${Math.round(record.score * 100)} percent. Hover or focus this block to reveal it.`;
+      }
     }
     evaluateRecord(record);
   }
   publishStats();
-}
-
-async function whitelistText(
-  record: AnalysisRecord,
-  falsePositiveButton: HTMLButtonElement,
-  domainButton: HTMLButtonElement,
-): Promise<void> {
-  const focusTarget = record.element;
-  focusTarget.focus({ preventScroll: true });
-  falsePositiveButton.disabled = true;
-  domainButton.disabled = true;
-  falsePositiveButton.textContent = 'Saving…';
-
-  try {
-    const response = await requestRuntimeMessage({
-      type: 'UPDATE_WHITELIST',
-      operation: 'addText',
-      value: record.normalizedText,
-    });
-    applyWhitelist(response.whitelist);
-    updateAllRecords();
-    sendRuntimeMessage({ type: 'RECORD_FALSE_POSITIVE' });
-    announceAction('This text will always be shown.');
-    restoreFocus(focusTarget);
-  } catch (error) {
-    console.error('[LocalGuardian Content] Could not save text allowlist entry:', error);
-    falsePositiveButton.disabled = false;
-    domainButton.disabled = false;
-    falsePositiveButton.textContent = 'Save failed — try again';
-    falsePositiveButton.focus({ preventScroll: true });
-  }
-}
-
-async function whitelistDomain(
-  record: AnalysisRecord,
-  falsePositiveButton: HTMLButtonElement,
-  domainButton: HTMLButtonElement,
-): Promise<void> {
-  const focusTarget = record.element;
-  focusTarget.focus({ preventScroll: true });
-  falsePositiveButton.disabled = true;
-  domainButton.disabled = true;
-  domainButton.textContent = 'Saving…';
-
-  try {
-    const response = await requestRuntimeMessage({
-      type: 'UPDATE_WHITELIST',
-      operation: 'addDomain',
-      value: HOSTNAME,
-    });
-    applyWhitelist(response.whitelist);
-    textQueue = [];
-    updateAllRecords();
-    announceAction(`LocalGuardian is paused on ${HOSTNAME}.`);
-    restoreFocus(focusTarget);
-  } catch (error) {
-    console.error('[LocalGuardian Content] Could not save domain allowlist entry:', error);
-    falsePositiveButton.disabled = false;
-    domainButton.disabled = false;
-    domainButton.textContent = 'Save failed — try again';
-    domainButton.focus({ preventScroll: true });
-  }
 }
 
 function isLocalGuardianMutation(mutation: MutationRecord): boolean {
@@ -1298,10 +1015,6 @@ const observer = new MutationObserver((mutations) => {
 
   if (shouldPublish) publishStats();
 });
-
-window.addEventListener('scroll', scheduleFeedbackLayout, true);
-window.addEventListener('resize', scheduleFeedbackLayout);
-document.addEventListener('pointerdown', dismissFeedbackOutside, true);
 
 chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
   if (!isRecord(message)) return false;

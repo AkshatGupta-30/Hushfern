@@ -2,7 +2,7 @@ import './analytics.scss'
 
 const ANALYTICS_KEY = 'localGuardianAnalytics'
 const DEFAULT_RANGE = 30
-const ALLOWED_RANGES = new Set([7, 30, 90])
+const ALLOWED_RANGES = new Set([1, 7, 30, 90])
 
 interface MetricTotals {
   analyzed: number
@@ -12,6 +12,7 @@ interface MetricTotals {
 
 interface AnalyticsDay extends MetricTotals {
   domains: Record<string, MetricTotals>
+  hours: Record<string, MetricTotals>
 }
 
 interface AnalyticsModel {
@@ -24,6 +25,12 @@ interface DatePoint extends MetricTotals {
   date: Date
   key: string
   domains: Record<string, MetricTotals>
+  hours: Record<string, MetricTotals>
+}
+
+interface ChartPoint extends MetricTotals {
+  label: string
+  tableLabel: string
 }
 
 const loadingElement = requireElement<HTMLElement>('analyticsLoading')
@@ -36,6 +43,7 @@ const rateElement = requireElement<HTMLElement>('summaryRate')
 const rangeLabelElement = requireElement<HTMLElement>('summaryRange')
 const chartElement = requireElement<HTMLElement>('historyChart')
 const chartScrollElement = requireElement<HTMLElement>('chartScroll')
+const chartTooltipElement = requireElement<HTMLElement>('chartTooltip')
 const chartEmptyElement = requireElement<HTMLElement>('chartEmpty')
 const historyTableElement = requireElement<HTMLElement>('historyTable')
 const domainRowsElement = requireElement<HTMLTableSectionElement>('domainRows')
@@ -116,6 +124,7 @@ function normalizeAnalytics(value: unknown): AnalyticsModel {
     const dayRecord = asRecord(dayValue)
     const totals = normalizeTotals(dayRecord)
     const domains: Record<string, MetricTotals> = {}
+    const hours: Record<string, MetricTotals> = {}
 
     for (const [domain, domainValue] of Object.entries(asRecord(dayRecord.domains))) {
       const normalizedDomain = domain.trim().toLowerCase()
@@ -123,7 +132,12 @@ function normalizeAnalytics(value: unknown): AnalyticsModel {
       domains[normalizedDomain] = normalizeTotals(domainValue)
     }
 
-    days[date] = { ...totals, domains }
+    for (const [hour, hourValue] of Object.entries(asRecord(dayRecord.hours))) {
+      if (!/^(?:0\d|1\d|2[0-3])$/.test(hour)) continue
+      hours[hour] = normalizeTotals(hourValue)
+    }
+
+    days[date] = { ...totals, domains, hours }
     addTotals(derivedTotals, totals)
   }
 
@@ -262,6 +276,7 @@ function pointsForRange(model: AnalyticsModel, range: number): DatePoint[] {
       toxic: day?.toxic ?? 0,
       falsePositives: day?.falsePositives ?? 0,
       domains: day?.domains ?? {},
+      hours: day?.hours ?? {},
     })
   }
 
@@ -295,6 +310,62 @@ function formatDayLabel(date: Date, includeMonth: boolean): string {
   )
 }
 
+function rangeLabel(range: number): string {
+  return range === 1 ? 'Today' : `Last ${range} days`
+}
+
+function formatHourLabel(hour: number): string {
+  const date = new Date()
+  date.setHours(hour, 0, 0, 0)
+  return new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).format(date)
+}
+
+function chartPointsForSelection(points: DatePoint[]): ChartPoint[] {
+  if (selectedRange !== 1) {
+    return points.map((point) => ({
+      analyzed: point.analyzed,
+      toxic: point.toxic,
+      falsePositives: point.falsePositives,
+      label: formatDayLabel(point.date, true),
+      tableLabel: point.date.toLocaleDateString(),
+    }))
+  }
+
+  const hours = points[0]?.hours ?? {}
+  return Array.from({ length: 24 }, (_, hour) => {
+    const totals = hours[String(hour).padStart(2, '0')] ?? emptyTotals()
+    return {
+      ...totals,
+      label: formatHourLabel(hour),
+      tableLabel: formatHourLabel(hour),
+    }
+  })
+}
+
+function chartDetail(point: ChartPoint): string {
+  return `${point.label}: ${formatNumber(point.analyzed)} analyzed, ${formatNumber(point.toxic)} hidden, ${formatNumber(point.falsePositives)} false positives`
+}
+
+function showChartTooltip(point: ChartPoint, target: HTMLElement): void {
+  chartTooltipElement.textContent = chartDetail(point)
+  chartTooltipElement.hidden = false
+
+  const targetRect = target.getBoundingClientRect()
+  const tooltipRect = chartTooltipElement.getBoundingClientRect()
+  const horizontalPadding = 10
+  const left = Math.min(
+    Math.max(horizontalPadding, targetRect.left + targetRect.width / 2 - tooltipRect.width / 2),
+    window.innerWidth - tooltipRect.width - horizontalPadding,
+  )
+  const top = Math.max(horizontalPadding, targetRect.top - tooltipRect.height - 8)
+  chartTooltipElement.style.left = `${Math.round(left)}px`
+  chartTooltipElement.style.top = `${Math.round(top)}px`
+}
+
+function hideChartTooltip(): void {
+  chartTooltipElement.hidden = true
+}
+
 function renderSummary(points: DatePoint[]): void {
   const totals = aggregatePoints(points)
   const rate = totals.analyzed > 0 ? (totals.toxic / totals.analyzed) * 100 : 0
@@ -302,33 +373,53 @@ function renderSummary(points: DatePoint[]): void {
   analyzedElement.textContent = formatNumber(totals.analyzed)
   toxicElement.textContent = formatNumber(totals.toxic)
   falsePositiveElement.textContent = formatNumber(totals.falsePositives)
-  rangeLabelElement.textContent = `Last ${selectedRange} days`
+  rangeLabelElement.textContent = rangeLabel(selectedRange)
   rateElement.textContent = `${rate.toLocaleString(undefined, { maximumFractionDigits: 1 })}% of analyzed content`
   lifetimeElement.textContent = `${formatNumber(analytics.totals.analyzed)} analyzed all time`
 }
 
 function renderChart(points: DatePoint[]): void {
-  const maximum = Math.max(0, ...points.flatMap((point) => [point.analyzed, point.toxic]))
+  const chartPoints = chartPointsForSelection(points)
+  const maximum = Math.max(0, ...chartPoints.flatMap((point) => [point.analyzed, point.toxic]))
   chartElement.replaceChildren()
   historyTableElement.replaceChildren()
+  hideChartTooltip()
 
-  const hasRangeActivity = points.some(
+  const hasRangeActivity = chartPoints.some(
     (point) => point.analyzed > 0 || point.toxic > 0 || point.falsePositives > 0,
   )
+  const hasTodayTotalsWithoutHourlyDetail =
+    selectedRange === 1 &&
+    !hasRangeActivity &&
+    Boolean(points[0] && (points[0].analyzed || points[0].toxic || points[0].falsePositives))
   chartEmptyElement.hidden = hasRangeActivity
+  chartEmptyElement.textContent = hasTodayTotalsWithoutHourlyDetail
+    ? 'Hourly activity begins after this update. Today’s total is shown above.'
+    : 'No activity was recorded in this date range.'
   chartScrollElement.hidden = !hasRangeActivity
 
   if (!hasRangeActivity) return
 
-  chartElement.style.setProperty('--day-count', String(points.length))
+  chartElement.setAttribute(
+    'aria-label',
+    selectedRange === 1 ? 'Hourly LocalGuardian protection activity for today' : 'Daily LocalGuardian protection activity',
+  )
+  chartElement.style.setProperty('--day-count', String(chartPoints.length))
   chartElement.style.setProperty('--chart-min-width', selectedRange === 90 ? '1040px' : selectedRange === 30 ? '680px' : '100%')
 
-  const labelInterval = selectedRange === 90 ? 14 : selectedRange === 30 ? 5 : 1
-  for (const [index, point] of points.entries()) {
+  const labelInterval = selectedRange === 1 ? 3 : selectedRange === 90 ? 14 : selectedRange === 30 ? 5 : 1
+  for (const [index, point] of chartPoints.entries()) {
     const column = document.createElement('div')
     column.className = 'day-column'
-    column.dataset.label = index % labelInterval === 0 || index === points.length - 1 ? formatDayLabel(point.date, true) : ''
-    column.title = `${formatDayLabel(point.date, true)}: ${formatNumber(point.analyzed)} analyzed, ${formatNumber(point.toxic)} hidden`
+    column.dataset.label = index % labelInterval === 0 || index === chartPoints.length - 1 ? point.label : ''
+    column.tabIndex = 0
+    column.setAttribute('role', 'img')
+    column.setAttribute('aria-label', chartDetail(point))
+    column.title = chartDetail(point)
+    column.addEventListener('mouseenter', () => showChartTooltip(point, column))
+    column.addEventListener('mouseleave', hideChartTooltip)
+    column.addEventListener('focus', () => showChartTooltip(point, column))
+    column.addEventListener('blur', hideChartTooltip)
 
     const analyzedBar = document.createElement('span')
     analyzedBar.className = 'chart-bar chart-bar-analyzed'
@@ -344,10 +435,10 @@ function renderChart(points: DatePoint[]): void {
 
   const accessibleTable = document.createElement('table')
   const caption = document.createElement('caption')
-  caption.textContent = `LocalGuardian activity for the last ${selectedRange} days`
+  caption.textContent = `LocalGuardian activity for ${rangeLabel(selectedRange).toLowerCase()}`
   const head = document.createElement('thead')
   const headRow = document.createElement('tr')
-  for (const label of ['Date', 'Analyzed', 'Hidden', 'False positives']) {
+  for (const label of [selectedRange === 1 ? 'Time' : 'Date', 'Analyzed', 'Hidden', 'False positives']) {
     const cell = document.createElement('th')
     cell.scope = 'col'
     cell.textContent = label
@@ -356,9 +447,9 @@ function renderChart(points: DatePoint[]): void {
   head.append(headRow)
 
   const body = document.createElement('tbody')
-  for (const point of points) {
+  for (const point of chartPoints) {
     const row = document.createElement('tr')
-    const values = [point.date.toLocaleDateString(), point.analyzed, point.toxic, point.falsePositives]
+    const values = [point.tableLabel, point.analyzed, point.toxic, point.falsePositives]
     for (const [index, value] of values.entries()) {
       const cell = document.createElement(index === 0 ? 'th' : 'td')
       if (index === 0) (cell as HTMLTableCellElement).scope = 'row'
