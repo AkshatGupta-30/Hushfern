@@ -1,6 +1,6 @@
 # LocalGuardian
 
-LocalGuardian is a Manifest V3 Chrome extension that classifies discussion text locally with `Xenova/toxic-bert` and softens content above your chosen toxicity threshold. After the model has been cached, classification stays on the device; analyzed text is not sent to an application server.
+LocalGuardian is a Manifest V3 Chrome extension that classifies readable website text locally with `Xenova/toxic-bert` and softens content above your chosen toxicity threshold. The model begins downloading into Chrome's local cache as soon as the extension is installed or updated. After it has been cached, classification stays on the device; analyzed text is not sent to an application server.
 
 ## Features
 
@@ -29,16 +29,16 @@ The first classification may take longer while the model assets are downloaded a
 
 ## Use
 
-1. Open the LocalGuardian toolbar popup on a supported discussion page.
+1. Open any normal HTTP or HTTPS website, then open the LocalGuardian toolbar popup.
 2. Move either slider; settings are saved immediately and applied to the current page.
 3. Hover or focus a blurred paragraph to reveal it temporarily.
 4. Choose **False positive** to allow that exact text, or **Always show on this site** to allow the current domain.
    If a site was allowed by mistake, use **Resume protection on this site** in the popup.
 5. Open **View analytics** for locally stored historical trends.
 
-## Supported pages
+## Website access
 
-The bundled manifest currently injects LocalGuardian on Reddit, Hacker News, Stack Overflow, and configured `onlineviewer.net` subdomains. Add another match pattern in `public/manifest.json` when expanding support to a new site.
+LocalGuardian runs on every HTTP and HTTPS website. Chrome will therefore show the standard permission notice that the extension can read and change site content. Browser-owned pages such as `chrome://extensions`, the Chrome Web Store, and other protected URLs do not permit content-script injection and cannot be moderated by extensions.
 
 ## Development
 

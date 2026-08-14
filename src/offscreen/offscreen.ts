@@ -9,6 +9,12 @@ const wasmBackend = env.backends.onnx.wasm;
 if (!wasmBackend) {
   throw new Error('The packaged ONNX WASM backend is unavailable.');
 }
+// Transformers.js defaults ONNX Runtime to `high-performance`, but Chromium
+// ignores that requestAdapter option on Windows and records it as an extension
+// warning. Leaving the supported optional flag unset preserves WebGPU while
+// letting Chrome choose the adapter without the ignored option.
+const webGpuBackend = env.backends.onnx.webgpu;
+if (webGpuBackend) delete webGpuBackend.powerPreference;
 // The cache helper converts the factory module to a blob URL. Extension-page
 // CSP intentionally permits only self-hosted scripts, so import the packaged
 // module directly instead; model files still use the normal browser cache.
@@ -20,6 +26,10 @@ wasmBackend.wasmPaths = {
 
 const OFFSCREEN_ANALYZE_TYPE = 'OFFSCREEN_ANALYZE_BATCH';
 const OFFSCREEN_RESULT_TYPE = 'OFFSCREEN_ANALYZE_BATCH_RESULT';
+const OFFSCREEN_WARMUP_TYPE = 'OFFSCREEN_WARMUP';
+const OFFSCREEN_DELIVERY_TYPE = 'OFFSCREEN_ANALYSIS_READY';
+const OFFSCREEN_ACTIVITY_STARTED_TYPE = 'OFFSCREEN_ANALYSIS_STARTED';
+const OFFSCREEN_ACTIVITY_FINISHED_TYPE = 'OFFSCREEN_ANALYSIS_FINISHED';
 const TOXIC_LABEL = 'toxic';
 const MAX_BATCH_SIZE = 50;
 const MAX_TEXT_LENGTH = 50_000;
@@ -33,6 +43,8 @@ interface OffscreenAnalyzeRequest {
   type: typeof OFFSCREEN_ANALYZE_TYPE;
   requestId: string;
   payloads: AnalyzeItem[];
+  tabId: number;
+  frameId: number;
 }
 
 interface OffscreenScore {
@@ -71,6 +83,9 @@ function validateRequest(value: Record<string, unknown>): OffscreenAnalyzeReques
   if (value.payloads.length > MAX_BATCH_SIZE) {
     throw new Error(`payloads cannot exceed ${MAX_BATCH_SIZE} items`);
   }
+  if (!Number.isInteger(value.tabId) || !Number.isInteger(value.frameId)) {
+    throw new Error('tabId and frameId must be integers');
+  }
 
   const ids = new Set<string>();
   const payloads = value.payloads.map((rawItem, index) => {
@@ -94,6 +109,8 @@ function validateRequest(value: Record<string, unknown>): OffscreenAnalyzeReques
     type: OFFSCREEN_ANALYZE_TYPE,
     requestId: value.requestId,
     payloads,
+    tabId: value.tabId as number,
+    frameId: value.frameId as number,
   };
 }
 
@@ -109,13 +126,10 @@ async function createClassifier(device: 'webgpu' | 'wasm'): Promise<TextClassifi
 }
 
 async function configureWebGpuAdapter(): Promise<boolean> {
-  const webGpuBackend = env.backends.onnx.webgpu;
   if (!navigator.gpu || !webGpuBackend) return false;
 
   try {
-    const adapter = await navigator.gpu.requestAdapter({
-      powerPreference: 'high-performance',
-    });
+    const adapter = await navigator.gpu.requestAdapter();
     if (!adapter) return false;
 
     // ONNX Runtime otherwise performs this probe during backend startup. A
@@ -227,11 +241,71 @@ function enqueueAnalysis(request: OffscreenAnalyzeRequest): Promise<OffscreenAna
   return operation;
 }
 
-chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) => {
-  if (!isRecord(message) || message.type !== OFFSCREEN_ANALYZE_TYPE) return false;
+function notifyBackground(type: string): void {
+  try {
+    chrome.runtime.sendMessage({ type }, () => {
+      void chrome.runtime.lastError;
+    });
+  } catch {
+    // The background worker may be restarting. Completion still reaches the
+    // content page; the next request can recreate this document if necessary.
+  }
+}
 
-  // Content scripts have a tab sender. Only extension-owned, tabless contexts
-  // (the background service worker) may use this internal inference protocol.
+function deliverAnalysisResult(
+  request: OffscreenAnalyzeRequest,
+  response: OffscreenAnalyzeResponse,
+): void {
+  try {
+    chrome.runtime.sendMessage(
+      {
+        type: OFFSCREEN_DELIVERY_TYPE,
+        requestId: request.requestId,
+        tabId: request.tabId,
+        frameId: request.frameId,
+        results: response.results,
+        ...(response.error ? { error: response.error } : {}),
+      },
+      () => {
+        void chrome.runtime.lastError;
+      },
+    );
+  } catch {
+    // Navigation or extension reload can remove the destination before a
+    // completed result is relayed. The page will submit fresh work if needed.
+  }
+}
+
+function warmUpClassifier(sendResponse: (response?: unknown) => void): void {
+  // Acknowledge before starting the large download. The offscreen document
+  // remains alive independently if the installation service worker suspends.
+  sendResponse({ ok: true });
+  notifyBackground(OFFSCREEN_ACTIVITY_STARTED_TYPE);
+  void getClassifier()
+    .then(() => {
+      console.log('[LocalGuardian Offscreen] Classifier warm-up complete.');
+    })
+    .catch((error) => {
+      console.error('[LocalGuardian Offscreen] Classifier warm-up failed:', error);
+    })
+    .finally(() => {
+      notifyBackground(OFFSCREEN_ACTIVITY_FINISHED_TYPE);
+    });
+}
+
+chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) => {
+  if (!isRecord(message)) return false;
+
+  if (message.type === OFFSCREEN_WARMUP_TYPE) {
+    if (sender.id !== chrome.runtime.id || sender.tab) return false;
+    warmUpClassifier(sendResponse);
+    return false;
+  }
+
+  if (message.type !== OFFSCREEN_ANALYZE_TYPE) return false;
+
+  // Only the extension's tabless background worker may assign the tab/frame
+  // delivery route for an inference job.
   if (sender.id !== chrome.runtime.id || sender.tab) return false;
 
   let request: OffscreenAnalyzeRequest;
@@ -248,16 +322,24 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
     return false;
   }
 
+  // Accept the job synchronously. Results are delivered later through the
+  // background relay, so model download/inference never holds a message port.
+  sendResponse({ ok: true });
+  notifyBackground(OFFSCREEN_ACTIVITY_STARTED_TYPE);
   void enqueueAnalysis(request)
-    .then(sendResponse)
+    .then((response) => {
+      deliverAnalysisResult(request, response);
+      notifyBackground(OFFSCREEN_ACTIVITY_FINISHED_TYPE);
+    })
     .catch((error) => {
       console.error('[LocalGuardian Offscreen] Batch analysis failed:', error);
-      sendResponse({
+      deliverAnalysisResult(request, {
         type: OFFSCREEN_RESULT_TYPE,
         requestId: request.requestId,
         results: [],
         error: 'The local toxicity classifier is unavailable.',
-      } satisfies OffscreenAnalyzeResponse);
+      });
+      notifyBackground(OFFSCREEN_ACTIVITY_FINISHED_TYPE);
     });
-  return true;
+  return false;
 });

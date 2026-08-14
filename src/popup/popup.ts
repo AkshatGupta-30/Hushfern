@@ -199,17 +199,7 @@ function isSupportedUrl(url: string | undefined): boolean {
   if (!url) return false
   try {
     const parsed = new URL(url)
-    if (parsed.protocol !== 'https:') return false
-    const host = parsed.hostname.toLowerCase()
-    return (
-      host === 'reddit.com' ||
-      host.endsWith('.reddit.com') ||
-      host === 'onlineviewer.net' ||
-      host.endsWith('.onlineviewer.net') ||
-      host === 'news.ycombinator.com' ||
-      host === 'stackoverflow.com' ||
-      host.endsWith('.stackoverflow.com')
-    )
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:'
   } catch {
     return false
   }
@@ -252,7 +242,7 @@ function renderActivityState(state: ActivityState, stats?: PageStats, host?: str
     unsupported: {
       badge: 'Unsupported',
       title: 'This page is not supported',
-      message: 'Open Reddit, Hacker News, Stack Overflow, or OnlineViewer to see live activity.',
+      message: 'Chrome internal pages and the Chrome Web Store do not allow extension content scripts.',
     },
     unavailable: {
       badge: 'Unavailable',

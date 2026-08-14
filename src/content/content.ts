@@ -2,6 +2,9 @@ console.log('[LocalGuardian Content] Content script injected.');
 
 const SETTINGS_STORAGE_KEY = 'localGuardianSettings';
 const WHITELIST_STORAGE_KEY = 'localGuardianWhitelist';
+const QUEUE_ANALYSIS_TYPE = 'QUEUE_ANALYSIS';
+const ANALYSIS_RESULT_TYPE = 'ANALYSIS_RESULT';
+const PING_CONTENT_TYPE = 'PING_CONTENT';
 
 const DEFAULT_SETTINGS: LocalGuardianSettings = {
   toxicityThreshold: 50,
@@ -24,14 +27,65 @@ const DIRECT_TEXT_BLOCK_SELECTOR = [
   '[itemprop="text"]',
 ].join(', ');
 
-const TEXT_BLOCK_SELECTOR = `p, ${DIRECT_TEXT_BLOCK_SELECTOR}`;
-const SCAN_SELECTOR = `${COMMENT_CONTAINER_SELECTOR}, ${DIRECT_TEXT_BLOCK_SELECTOR}`;
+const TEXT_BLOCK_SELECTOR = [
+  'p',
+  'li',
+  'blockquote',
+  'dd',
+  'dt',
+  'figcaption',
+  'td',
+  'th',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'main',
+  'article',
+  'section',
+  'div',
+  DIRECT_TEXT_BLOCK_SELECTOR,
+].join(', ');
+const EXCLUDED_CONTENT_SELECTOR = [
+  '[data-localguardian-ui]',
+  '[hidden]',
+  '[aria-hidden="true"]',
+  'script',
+  'style',
+  'noscript',
+  'template',
+  'pre',
+  'code',
+  'kbd',
+  'samp',
+  'svg',
+  'canvas',
+  'iframe',
+  'object',
+  'embed',
+  'button',
+  'input',
+  'textarea',
+  'select',
+  'option',
+  '[contenteditable=""]',
+  '[contenteditable="true"]',
+  '[contenteditable="plaintext-only"]',
+  'nav',
+  '[role="navigation"]',
+  '[role="menu"]',
+  '[role="menubar"]',
+  '[role="toolbar"]',
+].join(', ');
 const MIN_TEXT_LENGTH = 15;
 const MAX_ANALYSIS_TEXT_LENGTH = 50_000;
 const MAX_TEXT_WHITELIST_ENTRIES = 100;
 const MAX_DOMAIN_WHITELIST_ENTRIES = 100;
 const BATCH_SIZE = 10;
 const QUEUE_DELAY_MS = 250;
+const ANALYSIS_TIMEOUT_MS = 15 * 60_000;
 const HOSTNAME = window.location.hostname.trim().toLowerCase();
 
 interface LocalGuardianSettings {
@@ -102,6 +156,14 @@ interface PageStats {
   enabled: boolean;
 }
 
+class OffscreenModelError extends Error {}
+
+interface PendingAnalysis {
+  resolve: (response: Record<string, unknown>) => void;
+  reject: (error: Error) => void;
+  timeout: ReturnType<typeof setTimeout>;
+}
+
 const processedNodes = new WeakSet<HTMLElement>();
 const allowedTextByElement = new WeakMap<HTMLElement, string>();
 const recordsByElement = new WeakMap<HTMLElement, AnalysisRecord>();
@@ -117,6 +179,8 @@ let textQueue: QueueItem[] = [];
 let queueTimer: ReturnType<typeof setTimeout> | null = null;
 let requestInFlight = false;
 let lastPublishedStats = '';
+let extensionContextValid = true;
+const pendingAnalysisRequests = new Map<string, PendingAnalysis>();
 
 function clampInteger(value: unknown, minimum: number, maximum: number, fallback: number): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
@@ -352,6 +416,23 @@ function injectStyles(): void {
   (document.head ?? document.documentElement).append(style);
 }
 
+function cleanupOrphanedUi(): void {
+  // Static content scripts are not refreshed in existing tabs when an unpacked
+  // extension reloads. A newly injected instance removes UI and tokens left by
+  // the invalidated instance before it starts scanning again.
+  document.querySelectorAll<HTMLElement>('[data-localguardian-ui]').forEach((element) => element.remove());
+  document.querySelectorAll<HTMLElement>('.localguardian-hidden-text').forEach((wrapper) => {
+    wrapper.replaceWith(...wrapper.childNodes);
+  });
+  document
+    .querySelectorAll<HTMLElement>('[data-localguardian-token], .localguardian-blur, .localguardian-revealed')
+    .forEach((element) => {
+      delete element.dataset.localguardianToken;
+      element.classList.remove('localguardian-blur', 'localguardian-revealed');
+      element.style.removeProperty('--localguardian-blur-radius');
+    });
+}
+
 function elementText(element: HTMLElement): string {
   if (!element.querySelector('[data-localguardian-ui]')) {
     return normalizeText(element.innerText || element.textContent || '');
@@ -363,10 +444,16 @@ function elementText(element: HTMLElement): string {
 }
 
 function isEligibleTextElement(element: HTMLElement): boolean {
-  if (element.closest('[data-localguardian-ui]')) return false;
-  if (element.closest('button, input, textarea, select, [contenteditable="true"]')) return false;
+  if (element.closest(EXCLUDED_CONTENT_SELECTOR)) return false;
   if (processedNodes.has(element)) return false;
+  if (element.getClientRects().length === 0) return false;
+  const computedStyle = window.getComputedStyle(element);
+  if (computedStyle.display === 'none' || computedStyle.visibility === 'hidden') return false;
   return elementText(element).length > MIN_TEXT_LENGTH;
+}
+
+function isLeafTextBlock(element: HTMLElement): boolean {
+  return !element.querySelector(TEXT_BLOCK_SELECTOR);
 }
 
 function extractTextElements(target: Element): HTMLElement[] {
@@ -378,13 +465,16 @@ function extractTextElements(target: Element): HTMLElement[] {
 
   target.querySelectorAll<HTMLElement>(TEXT_BLOCK_SELECTOR).forEach((element) => elements.add(element));
 
+  const containingTextBlock = target.closest<HTMLElement>(TEXT_BLOCK_SELECTOR);
+  if (containingTextBlock) elements.add(containingTextBlock);
+
   // Some sites render a comment's text directly in the container without a
   // paragraph or dedicated leaf element.
   if (elements.size === 0 && target.matches(COMMENT_CONTAINER_SELECTOR) && target instanceof HTMLElement) {
     elements.add(target);
   }
 
-  return [...elements].filter(isEligibleTextElement);
+  return [...elements].filter(isLeafTextBlock).filter(isEligibleTextElement);
 }
 
 function scheduleQueue(delay = QUEUE_DELAY_MS): void {
@@ -433,6 +523,8 @@ function isItemCurrent(item: QueueItem): boolean {
 }
 
 function requeueItems(items: QueueItem[]): void {
+  if (!extensionContextValid) return;
+
   for (const item of items) {
     if (!isItemCurrent(item)) {
       processedNodes.delete(item.element);
@@ -452,25 +544,70 @@ function requeueItems(items: QueueItem[]): void {
   scheduleQueue(500);
 }
 
+function isExtensionContextInvalidated(message: string): boolean {
+  return message.toLowerCase().includes('extension context invalidated');
+}
+
+function stopInvalidatedContext(): void {
+  if (!extensionContextValid) return;
+
+  extensionContextValid = false;
+  requestInFlight = false;
+  textQueue = [];
+  if (queueTimer) {
+    clearTimeout(queueTimer);
+    queueTimer = null;
+  }
+  observer.disconnect();
+
+  for (const pending of pendingAnalysisRequests.values()) {
+    clearTimeout(pending.timeout);
+    pending.reject(new Error('Extension context invalidated. Refresh this page to reconnect LocalGuardian.'));
+  }
+  pendingAnalysisRequests.clear();
+
+  for (const record of [...trackedRecords]) removeRecord(record, true);
+  console.info('[LocalGuardian Content] Extension was reloaded. Refresh this page to reconnect LocalGuardian.');
+}
+
+function handleRuntimeError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  if (!isExtensionContextInvalidated(message)) return false;
+  stopInvalidatedContext();
+  return true;
+}
+
 function sendRuntimeMessage(message: Record<string, unknown>): void {
+  if (!extensionContextValid) return;
+
   try {
     chrome.runtime.sendMessage(message, () => {
       // Reading lastError prevents expected "no receiver" cases from being
       // reported as uncaught errors while the service worker restarts.
-      void chrome.runtime.lastError;
+      const error = chrome.runtime.lastError;
+      if (error) handleRuntimeError(new Error(error.message));
     });
   } catch (error) {
-    console.debug('[LocalGuardian Content] Runtime message could not be sent:', error);
+    if (!handleRuntimeError(error)) {
+      console.debug('[LocalGuardian Content] Runtime message could not be sent:', error);
+    }
   }
 }
 
 function requestRuntimeMessage(message: Record<string, unknown>): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
+    if (!extensionContextValid) {
+      reject(new Error('Extension context invalidated. Refresh this page to reconnect LocalGuardian.'));
+      return;
+    }
+
     try {
       chrome.runtime.sendMessage(message, (response: unknown) => {
         const error = chrome.runtime.lastError;
         if (error) {
-          reject(new Error(error.message));
+          const runtimeError = new Error(error.message);
+          handleRuntimeError(runtimeError);
+          reject(runtimeError);
           return;
         }
         if (!isRecord(response) || response.ok !== true) {
@@ -480,8 +617,30 @@ function requestRuntimeMessage(message: Record<string, unknown>): Promise<Record
         resolve(response);
       });
     } catch (error) {
+      handleRuntimeError(error);
       reject(error);
     }
+  });
+}
+
+function requestAnalysis(
+  payloads: Array<{ id: string; text: string }>,
+): Promise<Record<string, unknown>> {
+  const requestId = createToken();
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      pendingAnalysisRequests.delete(requestId);
+      reject(new Error('Local toxicity analysis timed out.'));
+    }, ANALYSIS_TIMEOUT_MS);
+
+    pendingAnalysisRequests.set(requestId, { resolve, reject, timeout });
+    void requestRuntimeMessage({ type: QUEUE_ANALYSIS_TYPE, requestId, payloads }).catch((error) => {
+      const pending = pendingAnalysisRequests.get(requestId);
+      if (!pending) return;
+      pendingAnalysisRequests.delete(requestId);
+      clearTimeout(pending.timeout);
+      pending.reject(error instanceof Error ? error : new Error(String(error)));
+    });
   });
 }
 
@@ -814,18 +973,16 @@ function registerResult(item: QueueItem, result: AnalysisResult): boolean | null
 }
 
 function processQueue(): void {
-  if (requestInFlight || textQueue.length === 0 || domainWhitelisted) return;
+  if (!extensionContextValid || requestInFlight || textQueue.length === 0 || domainWhitelisted) return;
 
   const batch = textQueue.splice(0, BATCH_SIZE);
   const payloads = batch.map(({ id, text }) => ({ id, text }));
   requestInFlight = true;
 
-  chrome.runtime.sendMessage({ type: 'ANALYZE_BATCH', payloads }, (response: unknown) => {
+  void requestAnalysis(payloads).then((response) => {
     requestInFlight = false;
-    const runtimeError = chrome.runtime.lastError;
-
-    if (runtimeError || !isRecord(response) || !Array.isArray(response.results)) {
-      console.warn('[LocalGuardian Content] Analysis request failed:', runtimeError?.message ?? 'Invalid response');
+    if (!Array.isArray(response.results)) {
+      console.warn('[LocalGuardian Content] Analysis request failed: Invalid response');
       requeueItems(batch);
       return;
     }
@@ -867,29 +1024,36 @@ function processQueue(): void {
     pruneDetachedRecords();
     publishStats();
     scheduleQueue(0);
+  }).catch((error) => {
+    requestInFlight = false;
+    if (!handleRuntimeError(error)) {
+      console.warn(
+        '[LocalGuardian Content] Analysis request failed:',
+        error instanceof Error ? error.message : 'Unknown error',
+      );
+      requeueItems(batch);
+    }
   });
 }
 
 function processNode(node: Node): void {
   if (!(node instanceof Element) || domainWhitelisted || node.closest('[data-localguardian-ui]')) return;
 
-  const targets = new Set<Element>();
-  if (node.matches(SCAN_SELECTOR)) targets.add(node);
-  node.querySelectorAll(SCAN_SELECTOR).forEach((target) => targets.add(target));
+  const elements = extractTextElements(node);
+  if (elements.length > 0) {
+    queueForAnalysis(elements);
+    return;
+  }
 
   const containingComment = node.closest(COMMENT_CONTAINER_SELECTOR);
-  if (containingComment) targets.add(containingComment);
-
-  for (const target of targets) queueForAnalysis(extractTextElements(target));
+  if (containingComment) queueForAnalysis(extractTextElements(containingComment));
 }
 
 function scanDocumentForUntrackedText(): void {
   if (domainWhitelisted) return;
 
   document.querySelectorAll<HTMLElement>(TEXT_BLOCK_SELECTOR).forEach((element) => {
-    const belongsToDiscussion = element.matches(DIRECT_TEXT_BLOCK_SELECTOR) || element.closest(COMMENT_CONTAINER_SELECTOR);
     if (
-      belongsToDiscussion &&
       !recordsByElement.has(element) &&
       !element.dataset.localguardianToken
     ) {
@@ -899,9 +1063,10 @@ function scanDocumentForUntrackedText(): void {
     }
   });
 
-  document.querySelectorAll<HTMLElement>(SCAN_SELECTOR).forEach((element) => {
-    processNode(element);
-  });
+  const elements = [...document.querySelectorAll<HTMLElement>(TEXT_BLOCK_SELECTOR)]
+    .filter(isLeafTextBlock)
+    .filter(isEligibleTextElement);
+  queueForAnalysis(elements);
 }
 
 function removeRecord(record: AnalysisRecord, restoreElement: boolean): void {
@@ -1139,7 +1304,35 @@ window.addEventListener('resize', scheduleFeedbackLayout);
 document.addEventListener('pointerdown', dismissFeedbackOutside, true);
 
 chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
-  if (!isRecord(message) || message.type !== 'GET_PAGE_STATS') return false;
+  if (!isRecord(message)) return false;
+
+  if (message.type === PING_CONTENT_TYPE) {
+    sendResponse({ ok: true });
+    return false;
+  }
+
+  if (message.type === ANALYSIS_RESULT_TYPE) {
+    const requestId = typeof message.requestId === 'string' ? message.requestId : '';
+    const pending = pendingAnalysisRequests.get(requestId);
+    if (!pending) {
+      sendResponse({ ok: false, error: 'Analysis request is no longer active.' });
+      return false;
+    }
+
+    pendingAnalysisRequests.delete(requestId);
+    clearTimeout(pending.timeout);
+    if (typeof message.error === 'string' && message.error.trim()) {
+      pending.reject(new OffscreenModelError(message.error));
+    } else if (Array.isArray(message.results)) {
+      pending.resolve({ results: message.results });
+    } else {
+      pending.reject(new Error('The classifier delivered an invalid result.'));
+    }
+    sendResponse({ ok: true });
+    return false;
+  }
+
+  if (message.type !== 'GET_PAGE_STATS') return false;
   sendResponse(currentStats());
   return false;
 });
@@ -1162,6 +1355,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 });
 
 async function initialize(): Promise<void> {
+  cleanupOrphanedUi();
   injectStyles();
 
   try {

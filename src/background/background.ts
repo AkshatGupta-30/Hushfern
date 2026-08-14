@@ -6,6 +6,13 @@ const ANALYTICS_STORAGE_KEY = 'localGuardianAnalytics';
 const OFFSCREEN_DOCUMENT_PATH = 'offscreen.html';
 const OFFSCREEN_ANALYZE_TYPE = 'OFFSCREEN_ANALYZE_BATCH';
 const OFFSCREEN_RESULT_TYPE = 'OFFSCREEN_ANALYZE_BATCH_RESULT';
+const OFFSCREEN_WARMUP_TYPE = 'OFFSCREEN_WARMUP';
+const OFFSCREEN_DELIVERY_TYPE = 'OFFSCREEN_ANALYSIS_READY';
+const OFFSCREEN_ACTIVITY_STARTED_TYPE = 'OFFSCREEN_ANALYSIS_STARTED';
+const OFFSCREEN_ACTIVITY_FINISHED_TYPE = 'OFFSCREEN_ANALYSIS_FINISHED';
+const QUEUE_ANALYSIS_TYPE = 'QUEUE_ANALYSIS';
+const ANALYSIS_RESULT_TYPE = 'ANALYSIS_RESULT';
+const PING_CONTENT_TYPE = 'PING_CONTENT';
 const OFFSCREEN_IDLE_TIMEOUT_MS = 5 * 60_000;
 
 const DEFAULT_SETTINGS = {
@@ -485,6 +492,112 @@ async function ensureOffscreenDocument(): Promise<void> {
   }
 }
 
+async function sendOffscreenCommand(message: Record<string, unknown>): Promise<unknown> {
+  let lastError: unknown = new Error('The offscreen document did not respond.');
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    await ensureOffscreenDocument();
+    try {
+      return await chrome.runtime.sendMessage(message);
+    } catch (error) {
+      lastError = error;
+      if (attempt === 0) await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    }
+  }
+  throw lastError;
+}
+
+async function warmUpClassifier(): Promise<void> {
+  const response = await sendOffscreenCommand({ type: OFFSCREEN_WARMUP_TYPE });
+  if (!isRecord(response) || response.ok !== true) {
+    throw new Error(
+      isRecord(response) && typeof response.error === 'string'
+        ? response.error
+        : 'The offscreen classifier did not accept the warm-up request.',
+    );
+  }
+}
+
+async function queueAnalysisJob(
+  message: Record<string, unknown>,
+  sender: chrome.runtime.MessageSender,
+): Promise<void> {
+  const tabId = sender.tab?.id;
+  const frameId = sender.frameId ?? 0;
+  const requestId = message.requestId;
+  if (!Number.isInteger(tabId)) throw new Error('Analysis requests must come from a browser tab.');
+  if (typeof requestId !== 'string' || !requestId || requestId.length > 200) {
+    throw new Error('Analysis request ID is invalid.');
+  }
+
+  const payloads = validateBatch(message.payloads);
+  const response = await sendOffscreenCommand({
+    type: OFFSCREEN_ANALYZE_TYPE,
+    requestId,
+    payloads,
+    tabId,
+    frameId,
+  });
+  if (!isRecord(response) || response.ok !== true) {
+    throw new Error(
+      isRecord(response) && typeof response.error === 'string'
+        ? response.error
+        : 'The offscreen classifier did not accept the analysis job.',
+    );
+  }
+}
+
+async function deliverAnalysisResult(message: Record<string, unknown>): Promise<void> {
+  const tabId = message.tabId;
+  const frameId = message.frameId;
+  const requestId = message.requestId;
+  if (!Number.isInteger(tabId) || !Number.isInteger(frameId)) {
+    throw new Error('The offscreen result has an invalid tab destination.');
+  }
+  if (typeof requestId !== 'string' || !requestId || requestId.length > 200) {
+    throw new Error('The offscreen result has an invalid request ID.');
+  }
+  if (!Array.isArray(message.results)) throw new Error('The offscreen result list is invalid.');
+
+  await chrome.tabs.sendMessage(
+    tabId as number,
+    {
+      type: ANALYSIS_RESULT_TYPE,
+      requestId,
+      results: message.results,
+      ...(typeof message.error === 'string' ? { error: message.error } : {}),
+    },
+    { frameId: frameId as number },
+  );
+}
+
+async function reinjectContentIntoOpenTabs(): Promise<void> {
+  // Give Chrome's static content-script registration a moment to populate any
+  // pages it handles automatically, then inject only where no live instance
+  // answers. This also replaces invalidated scripts after an unpacked reload.
+  await new Promise<void>((resolve) => setTimeout(resolve, 250));
+  const tabs = await chrome.tabs.query({});
+  await Promise.allSettled(tabs.map(async (tab) => {
+    if (!Number.isInteger(tab.id)) return;
+    try {
+      const response: unknown = await chrome.tabs.sendMessage(tab.id as number, { type: PING_CONTENT_TYPE });
+      if (isRecord(response) && response.ok === true) return;
+    } catch {
+      // No live content script is expected for an already-open tab after an
+      // install/update. Injection failures on protected pages are also normal.
+    }
+
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id as number },
+        files: ['content.js'],
+      });
+    } catch {
+      // Chrome-owned pages, the Web Store, and other protected URLs reject
+      // programmatic injection and remain outside extension control.
+    }
+  }));
+}
+
 function scheduleOffscreenIdleClose(): void {
   if (offscreenIdleTimer) clearTimeout(offscreenIdleTimer);
   offscreenIdleTimer = setTimeout(() => {
@@ -672,6 +785,15 @@ chrome.runtime.onInstalled.addListener(() => {
   void initializeStorageDefaults().catch((error) => {
     console.error('[LocalGuardian BG] Failed to initialize storage defaults:', error);
   });
+  // Start the large model download immediately after install/update. The
+  // offscreen document acknowledges synchronously and owns the long-running
+  // download, so this event does not depend on service-worker lifetime.
+  void warmUpClassifier().catch((error) => {
+    console.error('[LocalGuardian BG] Classifier warm-up could not be started:', error);
+  });
+  void reinjectContentIntoOpenTabs().catch((error) => {
+    console.error('[LocalGuardian BG] Could not reconnect existing website tabs:', error);
+  });
 });
 
 // Handle incoming checks, analytics events, and live page-count badge updates.
@@ -685,18 +807,101 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
   // service worker must not answer one: the offscreen document's response is
   // the only response the requesting promise should observe.
   if (message.type === OFFSCREEN_ANALYZE_TYPE) return false;
+  if (message.type === OFFSCREEN_WARMUP_TYPE) return false;
 
-  if (message.type === 'ANALYZE_BATCH') {
-    void analyzeBatch(message)
-      .then(sendResponse)
-      .catch((error) => {
-        console.error('[LocalGuardian BG] Batch analysis failed:', error);
-        sendResponse({
+  if (message.type === OFFSCREEN_DELIVERY_TYPE) {
+    const isTrustedOffscreenSender =
+      sender.id === chrome.runtime.id &&
+      !sender.tab &&
+      sender.url === chrome.runtime.getURL(OFFSCREEN_DOCUMENT_PATH);
+    if (!isTrustedOffscreenSender) {
+      sendResponse({ ok: false, error: 'Offscreen result sender is invalid.' });
+      return false;
+    }
+
+    sendResponse({ ok: true });
+    void deliverAnalysisResult(message).catch((error) => {
+      console.debug('[LocalGuardian BG] Analysis result could not be delivered:', error);
+    });
+    return false;
+  }
+
+  if (message.type === QUEUE_ANALYSIS_TYPE) {
+    const tabId = sender.tab?.id;
+    const frameId = sender.frameId ?? 0;
+    const requestId = message.requestId;
+    try {
+      if (!Number.isInteger(tabId)) throw new Error('Analysis requests must come from a browser tab.');
+      if (typeof requestId !== 'string' || !requestId || requestId.length > 200) {
+        throw new Error('Analysis request ID is invalid.');
+      }
+      validateBatch(message.payloads);
+    } catch (error) {
+      sendResponse({
+        ok: false,
+        error: error instanceof Error ? error.message : 'The analysis job is invalid.',
+      });
+      return false;
+    }
+
+    // Acknowledge synchronously; every later success/failure uses the separate
+    // ANALYSIS_RESULT message and cannot produce an async channel-closed error.
+    sendResponse({ ok: true });
+    void queueAnalysisJob(message, sender).catch((error) => {
+      console.error('[LocalGuardian BG] Could not queue analysis:', error);
+      void chrome.tabs.sendMessage(
+        tabId as number,
+        {
+          type: ANALYSIS_RESULT_TYPE,
+          requestId,
           results: [],
-          error: error instanceof Error ? error.message : 'Batch analysis failed.',
+          error: error instanceof Error ? error.message : 'The analysis job could not be queued.',
+        },
+        { frameId },
+      ).catch(() => undefined);
+    });
+    return false;
+  }
+
+  if (message.type === OFFSCREEN_ACTIVITY_STARTED_TYPE) {
+    activeOffscreenRequests += 1;
+    if (offscreenIdleTimer) {
+      clearTimeout(offscreenIdleTimer);
+      offscreenIdleTimer = null;
+    }
+    sendResponse({ ok: true });
+    return false;
+  }
+
+  if (message.type === OFFSCREEN_ACTIVITY_FINISHED_TYPE) {
+    activeOffscreenRequests = Math.max(0, activeOffscreenRequests - 1);
+    scheduleOffscreenIdleClose();
+    sendResponse({ ok: true });
+    return false;
+  }
+
+  if (message.type === 'PREPARE_ANALYZER') {
+    if (offscreenIdleTimer) {
+      clearTimeout(offscreenIdleTimer);
+      offscreenIdleTimer = null;
+    }
+    void ensureOffscreenDocument()
+      .then(() => sendResponse({ ok: true }))
+      .catch((error) => {
+        console.error('[LocalGuardian BG] Could not prepare the offscreen classifier:', error);
+        sendResponse({
+          ok: false,
+          error: error instanceof Error ? error.message : 'The local classifier could not be prepared.',
         });
       });
     return true;
+  }
+
+  if (message.type === 'ANALYZE_BATCH') {
+    // Compatibility response for a content script left behind by an extension
+    // reload. Current builds use QUEUE_ANALYSIS and never hold this channel.
+    sendResponse({ results: [], error: 'Reloaded analysis protocol is no longer active.' });
+    return false;
   }
 
   if (message.type === 'RECORD_FALSE_POSITIVE') {
