@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <title>LocalGuardian controls</title>
+  </head>
+  <body class="popup-page">
+    <main class="popup-shell" aria-labelledby="popup-title">
+      <header class="brand-header">
+        <div class="brand-lockup">
+          <span class="brand-mark" aria-hidden="true">LG</span>
+          <div>
+            <h1 id="popup-title">LocalGuardian</h1>
+            <p>Private, on-device protection</p>
+          </div>
+        </div>
+        <button
+          class="icon-button"
+          id="refreshStats"
+          type="button"
+          aria-label="Refresh current page activity"
+          title="Refresh current page activity"
+        >
+          <span aria-hidden="true">Refresh</span>
+        </button>
+      </header>
+
+      <section class="page-activity" id="pageActivity" data-state="loading" aria-labelledby="activity-title">
+        <div class="activity-heading">
+          <div>
+            <p class="section-label">Current page</p>
+            <h2 id="activity-title">Checking this tab</h2>
+          </div>
+          <span class="status-badge" id="pageStatus">Loading</span>
+        </div>
+
+        <div class="activity-counts" id="activityCounts" aria-live="polite" aria-atomic="true" aria-busy="true">
+          <div class="count-primary">
+            <strong id="toxicCount">-</strong>
+            <span>toxic blocks hidden</span>
+          </div>
+          <div class="count-secondary">
+            <strong id="analyzedCount">-</strong>
+            <span>analyzed</span>
+          </div>
+        </div>
+
+        <p class="activity-message" id="activityMessage" role="status">
+          Connecting to the current page.
+        </p>
+        <p class="hostname" id="hostname" hidden></p>
+        <button class="resume-button" id="resumeProtection" type="button" hidden>
+          Resume protection on this site
+        </button>
+      </section>
+
+      <section class="controls" aria-labelledby="controls-title">
+        <div class="section-heading-row">
+          <div>
+            <p class="section-label">Protection controls</p>
+            <h2 id="controls-title">Tune what gets hidden</h2>
+          </div>
+          <span class="save-status" id="settingsStatus" aria-live="polite">Saved locally</span>
+        </div>
+
+        <div class="range-control">
+          <div class="range-label-row">
+            <label for="toxicityThreshold">Toxicity threshold</label>
+            <output id="toxicityValue" for="toxicityThreshold">50%</output>
+          </div>
+          <input
+            id="toxicityThreshold"
+            name="toxicityThreshold"
+            type="range"
+            min="40"
+            max="80"
+            step="1"
+            value="50"
+            aria-describedby="toxicityHint"
+          />
+          <div class="range-bounds" aria-hidden="true"><span>40%</span><span>80%</span></div>
+          <p class="range-hint" id="toxicityHint">Lower values filter more aggressively.</p>
+        </div>
+
+        <div class="range-control">
+          <div class="range-label-row">
+            <label for="blurIntensity">Blur intensity</label>
+            <output id="blurValue" for="blurIntensity">8px</output>
+          </div>
+          <input
+            id="blurIntensity"
+            name="blurIntensity"
+            type="range"
+            min="3"
+            max="10"
+            step="1"
+            value="8"
+            aria-describedby="blurHint"
+          />
+          <div class="range-bounds" aria-hidden="true"><span>3px</span><span>10px</span></div>
+          <p class="range-hint" id="blurHint">Hovering a hidden block still reveals it.</p>
+        </div>
+      </section>
+
+      <footer class="popup-footer">
+        <button class="analytics-button" id="openAnalytics" type="button">
+          <span>View protection history</span>
+          <span aria-hidden="true">Open</span>
+        </button>
+        <p>Your page text and protection history stay on this device.</p>
+      </footer>
+    </main>
+
+    <script type="module" src="/src/popup/popup.ts"></script>
+  </body>
+</html>

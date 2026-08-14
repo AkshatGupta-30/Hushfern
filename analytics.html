@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <title>LocalGuardian protection history</title>
+  </head>
+  <body class="analytics-page">
+    <a class="skip-link" href="#main-content">Skip to analytics</a>
+
+    <header class="analytics-header">
+      <div class="header-inner">
+        <div class="brand-lockup">
+          <span class="brand-mark" aria-hidden="true">LG</span>
+          <div>
+            <p class="product-name">LocalGuardian</p>
+            <p>Protection history</p>
+          </div>
+        </div>
+        <div class="privacy-note">
+          <strong>Stored locally</strong>
+          <span>No browsing data leaves your device.</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="analytics-shell" id="main-content">
+      <section class="analytics-intro" aria-labelledby="analytics-title">
+        <div>
+          <p class="section-label">Your activity</p>
+          <h1 id="analytics-title">Protection at a glance</h1>
+          <p>See what LocalGuardian analyzed and hid while you browsed supported sites.</p>
+        </div>
+        <div class="range-selector" role="group" aria-label="Analytics date range">
+          <button type="button" data-range="7" aria-pressed="false">7 days</button>
+          <button type="button" data-range="30" aria-pressed="true">30 days</button>
+          <button type="button" data-range="90" aria-pressed="false">90 days</button>
+        </div>
+      </section>
+
+      <div class="analytics-loading" id="analyticsLoading" role="status">
+        <span>Loading your local history</span>
+      </div>
+
+      <section class="analytics-empty" id="analyticsEmpty" aria-labelledby="empty-title" hidden>
+        <span class="empty-mark" aria-hidden="true">LG</span>
+        <h2 id="empty-title">No protection history yet</h2>
+        <p>Browse a supported page and LocalGuardian will record private, on-device totals here.</p>
+      </section>
+
+      <div id="analyticsContent" hidden>
+        <section class="summary-grid" aria-label="Selected period summary">
+          <article class="summary-item summary-highlight">
+            <p>Content analyzed</p>
+            <strong id="summaryAnalyzed">0</strong>
+            <span id="summaryRange">Last 30 days</span>
+          </article>
+          <article class="summary-item">
+            <p>Toxic blocks hidden</p>
+            <strong id="summaryToxic">0</strong>
+            <span id="summaryRate">0% of analyzed content</span>
+          </article>
+          <article class="summary-item">
+            <p>False positives reported</p>
+            <strong id="summaryFalsePositives">0</strong>
+            <span>Used to refine your local allowlist</span>
+          </article>
+        </section>
+
+        <section class="history-section" aria-labelledby="history-title">
+          <div class="section-heading-row">
+            <div>
+              <h2 id="history-title">Daily protection activity</h2>
+              <p>Analyzed content compared with blocks hidden each day.</p>
+            </div>
+            <div class="chart-legend" aria-hidden="true">
+              <span class="legend-analyzed">Analyzed</span>
+              <span class="legend-toxic">Hidden</span>
+            </div>
+          </div>
+
+          <div class="chart-empty" id="chartEmpty" hidden>No activity was recorded in this date range.</div>
+          <div class="chart-scroll" id="chartScroll">
+            <div
+              class="bar-chart"
+              id="historyChart"
+              role="img"
+              aria-label="Daily LocalGuardian protection activity"
+            ></div>
+          </div>
+          <div class="visually-hidden" id="historyTable"></div>
+        </section>
+
+        <section class="domains-section" aria-labelledby="domains-title">
+          <div class="section-heading-row">
+            <div>
+              <h2 id="domains-title">Most protected domains</h2>
+              <p>Activity is grouped by hostname and never synced elsewhere.</p>
+            </div>
+            <p class="lifetime-total" id="lifetimeTotal">0 analyzed all time</p>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Domain</th>
+                  <th scope="col">Analyzed</th>
+                  <th scope="col">Hidden</th>
+                  <th scope="col">False positives</th>
+                </tr>
+              </thead>
+              <tbody id="domainRows"></tbody>
+            </table>
+            <p class="domain-empty" id="domainEmpty" hidden>No domain activity in this date range.</p>
+          </div>
+        </section>
+      </div>
+
+      <section class="exceptions-section" id="exceptionsSection" aria-labelledby="exceptions-title" hidden>
+        <div class="section-heading-row">
+          <div>
+            <h2 id="exceptions-title">Text exceptions</h2>
+            <p>Exact text you marked as a false positive. Removing an entry lets it be evaluated again.</p>
+          </div>
+        </div>
+        <ul class="exceptions-list" id="exceptionRows"></ul>
+        <p class="domain-empty" id="exceptionEmpty">No text exceptions saved.</p>
+        <p class="visually-hidden" id="exceptionStatus" role="status" aria-live="polite" aria-atomic="true"></p>
+      </section>
+
+      <footer class="analytics-footer">
+        <p id="lastUpdated">History updates automatically while this page is open.</p>
+        <p>LocalGuardian keeps analysis, settings, allowlists, and statistics in Chrome local storage.</p>
+      </footer>
+    </main>
+
+    <script type="module" src="/src/analytics/analytics.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,132 @@
+:root {
+  color-scheme: dark;
+  --bg: #07111f;
+  --surface: #0d1a2b;
+  --surface-raised: #122338;
+  --surface-soft: #102033;
+  --border: #294057;
+  --border-strong: #587b99;
+  --text: #eef8fb;
+  --text-muted: #a9bdca;
+  --text-subtle: #7f9aac;
+  --accent: #55d5e8;
+  --accent-strong: #74e4f1;
+  --accent-ink: #06222a;
+  --danger: #ff9b98;
+  --warning: #f6c177;
+  --success: #82d6b2;
+  --radius: 12px;
+  font-family:
+    "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--bg);
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  color: inherit;
+}
+
+button,
+input[type="range"] {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+input:focus-visible,
+a:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+
+button:active {
+  transform: translateY(1px);
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.brand-lockup {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 11px;
+}
+
+.brand-mark {
+  display: inline-grid;
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--accent) 64%, var(--border));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  color: var(--accent-strong);
+  font-family: ui-monospace, "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+  font-size: 0.76rem;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+}
+
+.section-label {
+  margin: 0 0 3px;
+  color: var(--text-subtle);
+  font-size: 0.73rem;
+  font-weight: 650;
+}
+
+.section-heading-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+@media (forced-colors: active) {
+  .brand-mark {
+    border-color: ButtonText;
+  }
+}

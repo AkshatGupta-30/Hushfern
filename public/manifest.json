@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "LocalGuardian - On-device Moderator",
+  "version": "1.1.0",
+  "minimum_chrome_version": "116",
+  "description": "Private, on-device toxicity moderation with adjustable blurring and local analytics.",
+  "permissions": ["storage", "activeTab", "offscreen"],
+  "host_permissions": [
+    "https://*.huggingface.co/*",
+    "https://*.hf.co/*"
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "LocalGuardian controls"
+  },
+  "options_page": "analytics.html",
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.reddit.com/*",
+        "https://*.onlineviewer.net/*",
+        "https://news.ycombinator.com/*",
+        "https://*.stackoverflow.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

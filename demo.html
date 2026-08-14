@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LocalGuardian - Live Test Suite</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 0 20px;
+            background-color: #0f172a;
+            color: #f8fafc;
+            line-height: 1.6;
+        }
+        h1, h2 {
+            color: #38bdf8;
+            border-bottom: 2px solid #334155;
+            padding-bottom: 8px;
+        }
+        .card {
+            background-color: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        p {
+            font-size: 1.1rem;
+            margin: 12px 0;
+        }
+        .instructions {
+            background-color: #0284c7;
+            color: white;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 30px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>LocalGuardian Test Suite</h1>
+    
+    <div class="instructions">
+        <h3>How to test:</h3>
+        <ol>
+            <li>Build the extension, load the <code>dist</code> directory in Chrome, and open this file from a host covered by the manifest.</li>
+            <li>Open the toolbar popup to watch the analyzed and hidden-content counts update.</li>
+            <li>Change both sliders, then hover or focus a blurred paragraph to reveal its local feedback controls.</li>
+            <li>Use the dynamic test to confirm newly inserted comments are analyzed safely.</li>
+        </ol>
+    </div>
+
+    <div class="card" data-testid="comment">
+        <h2>Category 1: Safe & Wholesome Content (Should Remain Clear)</h2>
+        <p>Have a wonderful day ahead! I am really looking forward to reviewing the hackathon source code tomorrow morning.</p>
+        <p>Local-first software architectures protect user privacy by ensuring zero data leaves your local physical device.</p>
+        <p>Let's collaborate on building the React Native mobile interface for our upcoming product launch.</p>
+    </div>
+
+    <div class="card" data-testid="comment">
+        <h2>Category 2: Toxic & Hostile Content (Should Trigger Blur & Console Logs)</h2>
+        <p>You are completely useless and I genuinely hate everything you do in this team.</p>
+        <p>Get out of here, nobody wants you around, you absolute failure.</p>
+        <p>This project is complete garbage and you should be ashamed of writing such terrible code.</p>
+    </div>
+
+    <div class="card">
+        <h2>Category 3: Dynamic Test Injection</h2>
+        <p>Click the button below to simulate dynamic content loading (like infinite scroll or a new comment popping up).</p>
+        <button id="injectBtn" style="background-color: #22c55e; color: white; border: none; padding: 10px 16px; border-radius: 4px; font-weight: bold; cursor: pointer;">Inject Dynamic Content</button>
+        <div id="dynamicContainer" aria-live="polite"></div>
+    </div>
+
+    <script>
+        document.getElementById('injectBtn').addEventListener('click', () => {
+            const container = document.getElementById('dynamicContainer');
+            const comment = document.createElement('div');
+            comment.dataset.testid = 'comment';
+
+            // Add a newly rendered comment container so the MutationObserver
+            // follows the same path it sees on supported discussion pages.
+            const toxicP = document.createElement('p');
+            toxicP.innerText = "You are an absolute idiot and this application is totally worthless.";
+            
+            // Adding a safe paragraph
+            const safeP = document.createElement('p');
+            safeP.innerText = "This is a dynamically appended comment loaded via user interaction.";
+            
+            comment.appendChild(safeP);
+            comment.appendChild(toxicP);
+            container.appendChild(comment);
+        });
+    </script>
+
+</body>
+</html>
