@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <meta
+      name="description"
+      content="Hushfern privacy policy describing local webpage text analysis, local storage, retention, and user controls."
+    />
+    <title>Privacy Policy | Hushfern</title>
+    <link rel="icon" href="assets/logo.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="assets/legal.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#legal-document">Skip to privacy policy</a>
+
+    <header class="site-header">
+      <div class="header-inner">
+        <a class="brand-lockup" href="privacy-policy.html" aria-label="Hushfern legal home">
+          <img src="assets/logo.svg" width="42" height="42" alt="" />
+          <span>
+            <strong>Hushfern</strong>
+            <span>Local protection for the web</span>
+          </span>
+        </a>
+        <nav class="legal-nav" aria-label="Legal documents">
+          <a href="privacy-policy.html" aria-current="page">Privacy</a>
+          <a href="https://github.com/AkshatGupta-30/Hushfern/blob/main/LICENSE.md">License</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="page-shell">
+      <header class="legal-hero">
+        <div>
+          <p class="eyebrow">Your data stays yours</p>
+          <h1>Privacy, explained plainly.</h1>
+          <p class="hero-summary">
+            Hushfern analyzes eligible webpage text on your device. The text it analyzes is not
+            uploaded to us, and we do not operate a browsing analytics service.
+          </p>
+        </div>
+        <aside class="document-meta" aria-label="Document information">
+          <dl>
+            <div>
+              <dt>Effective</dt>
+              <dd><time datetime="2026-08-15">15 August 2026</time></dd>
+            </div>
+            <div>
+              <dt>Applies to</dt>
+              <dd>Hushfern for Chrome</dd>
+            </div>
+            <div>
+              <dt>Policy version</dt>
+              <dd>1.0</dd>
+            </div>
+          </dl>
+        </aside>
+      </header>
+
+      <div class="legal-layout">
+        <nav class="table-of-contents" aria-label="Privacy policy contents">
+          <p>On this page</p>
+          <ol>
+            <li><a href="#scope">Scope</a></li>
+            <li><a href="#data">Information handled</a></li>
+            <li><a href="#use">How it is used</a></li>
+            <li><a href="#processing">Local processing</a></li>
+            <li><a href="#sharing">Sharing and sale</a></li>
+            <li><a href="#retention">Retention</a></li>
+            <li><a href="#permissions">Chrome permissions</a></li>
+            <li><a href="#control">Your choices</a></li>
+            <li><a href="#limited-use">Limited Use</a></li>
+            <li><a href="#contact">Contact</a></li>
+          </ol>
+        </nav>
+
+        <article class="legal-document" id="legal-document">
+          <p class="notice">
+            <strong>Short version:</strong> Hushfern reads eligible visible text only to provide
+            toxicity filtering. Classification happens locally. Page text is not sent to the
+            Hushfern developer or to an inference service.
+          </p>
+
+          <section class="legal-section" id="scope">
+            <h2>1. Scope</h2>
+            <p>
+              This Privacy Policy describes how the Hushfern Chrome extension accesses, uses,
+              stores, and discloses information. It applies to the extension and the legal pages
+              published for it. It does not govern Chrome, the Chrome Web Store, websites you
+              visit, or third-party services that operate under their own policies.
+            </p>
+          </section>
+
+          <section class="legal-section" id="data">
+            <h2>2. Information Hushfern handles</h2>
+            <p>
+              Chrome considers website content and browsing activity to be user data even when
+              they are processed only on the user's device. Hushfern handles the following limited
+              categories to provide its disclosed filtering and history features.
+            </p>
+
+            <div class="data-table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Information</th>
+                    <th scope="col">Why it is used</th>
+                    <th scope="col">Storage</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <th scope="row">Eligible visible webpage text</th>
+                    <td>To classify potentially toxic text and apply the visual blur.</td>
+                    <td>Processed transiently in extension memory. Not retained as analytics.</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Website hostname</th>
+                    <td>To show current-page status and group local protection history by site.</td>
+                    <td>Stored in Chrome local extension storage with aggregate counts.</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Protection activity</th>
+                    <td>To show analyzed and hidden counts by hour, day, and selected period.</td>
+                    <td>Stored as local aggregate statistics.</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Preferences</th>
+                    <td>To remember threshold, blur intensity, and hover behavior.</td>
+                    <td>Stored in Chrome local extension storage.</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Local exceptions</th>
+                    <td>To honor domain or text exceptions if they exist, including legacy entries.</td>
+                    <td>Stored locally until removed, cleared, or the extension is uninstalled.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <h3>Content Hushfern is designed to exclude</h3>
+            <p>
+              Hushfern is designed not to analyze editable fields such as inputs, textareas, and
+              content-editable regions. It also excludes code, navigation, and content hidden from
+              view where detected. No automated selector can guarantee perfect classification of
+              every website structure, so users should avoid entering sensitive information into
+              ordinary non-editable page elements while an extension has page access.
+            </p>
+          </section>
+
+          <section class="legal-section" id="use">
+            <h2>3. How information is used</h2>
+            <p>Hushfern uses the information above only to:</p>
+            <ul>
+              <li>Analyze eligible text for toxicity on the user's device.</li>
+              <li>Hide text that meets the user-selected toxicity threshold.</li>
+              <li>Apply the user's blur and hover preferences.</li>
+              <li>Show current-page counts and locally stored protection history.</li>
+              <li>Maintain local site or text exceptions where present.</li>
+            </ul>
+            <p>
+              The information is not used for advertising, cross-site tracking, personalized
+              marketing, creditworthiness, lending, insurance, employment, housing, or any purpose
+              unrelated to Hushfern's disclosed functionality.
+            </p>
+          </section>
+
+          <section class="legal-section" id="processing">
+            <h2>4. Local processing and model files</h2>
+            <p>
+              Toxicity classification runs locally in an extension-owned offscreen document. The
+              model, tokenizer, configuration, and ONNX runtime files are packaged with Hushfern.
+              Hushfern does not send webpage text to the developer, a hosted inference endpoint,
+              an advertising platform, or a third-party analytics service.
+            </p>
+            <p>
+              Chrome may download extension installations and updates from the Chrome Web Store.
+              That distribution is provided by Google and is separate from Hushfern's local page
+              analysis.
+            </p>
+          </section>
+
+          <section class="legal-section" id="sharing">
+            <h2>5. Sharing, sale, and human access</h2>
+            <p>
+              Hushfern does not sell, rent, disclose, or transfer analyzed page text, hostnames,
+              settings, or protection history to the developer or to third parties. The developer
+              does not receive these locally stored records and does not provide human access to
+              them.
+            </p>
+            <p>
+              Websites you visit, Chrome, your operating system, and any browser synchronization or
+              device-management services you independently use may handle information under their
+              own terms. Hushfern does not control those services.
+            </p>
+          </section>
+
+          <section class="legal-section" id="retention">
+            <h2>6. Retention and security</h2>
+            <p>
+              Daily protection activity is retained locally for a rolling period of up to 90 days.
+              Aggregate lifetime totals, preferences, and exception entries may remain until the
+              extension's local storage is cleared or Hushfern is uninstalled.
+            </p>
+            <p>
+              Hushfern minimizes retained information and uses Chrome's extension storage rather
+              than a developer-operated database. No system can promise absolute security, but
+              keeping analysis and history local reduces exposure to remote collection and breach.
+            </p>
+          </section>
+
+          <section class="legal-section" id="permissions">
+            <h2>7. Chrome permissions</h2>
+            <ul>
+              <li><strong>Website access:</strong> reads eligible text on ordinary HTTP and HTTPS pages so filtering can work across the web.</li>
+              <li><strong>Storage:</strong> saves settings, exceptions, and aggregate protection history locally.</li>
+              <li><strong>Offscreen:</strong> provides an extension-owned context for local model inference.</li>
+              <li><strong>Scripting:</strong> reconnects Hushfern to supported tabs after installation or update when Chrome permits it.</li>
+            </ul>
+            <p>
+              Chrome internal pages and the Chrome Web Store restrict content-script access, so
+              Hushfern cannot operate on those pages.
+            </p>
+          </section>
+
+          <section class="legal-section" id="control">
+            <h2>8. Your choices and deletion</h2>
+            <p>You can control Hushfern by:</p>
+            <ul>
+              <li>Changing the toxicity threshold, blur intensity, and hover setting.</li>
+              <li>Pausing or removing Hushfern's access through Chrome's extension controls.</li>
+              <li>Clearing Hushfern's extension storage through Chrome.</li>
+              <li>Uninstalling Hushfern, which removes its local extension storage.</li>
+            </ul>
+            <p>
+              Because Hushfern does not operate an account system or receive the local records, the
+              developer cannot retrieve, export, edit, or delete data from your device on your behalf.
+            </p>
+          </section>
+
+          <section class="legal-section" id="limited-use">
+            <h2>9. Chrome Web Store Limited Use</h2>
+            <p>
+              Hushfern's use of information complies with the Chrome Web Store User Data Policy,
+              including the Limited Use requirements. Information is accessed and used only to
+              provide or improve Hushfern's disclosed, user-facing toxicity-filtering functionality
+              and directly related operational features.
+            </p>
+          </section>
+
+          <section class="legal-section" id="children">
+            <h2>10. Children's privacy</h2>
+            <p>
+              Hushfern does not require an account and the developer does not knowingly collect
+              personal information from children. Parents and guardians should manage extension
+              installation and browsing permissions for children under their supervision.
+            </p>
+          </section>
+
+          <section class="legal-section" id="changes">
+            <h2>11. Changes to this policy</h2>
+            <p>
+              This policy may be updated when Hushfern's features, data practices, or legal
+              obligations change. The effective date and policy version will be updated. Material
+              changes to data practices will also be disclosed through the product or Chrome Web
+              Store listing before the changed practice applies.
+            </p>
+          </section>
+
+          <section class="legal-section" id="contact">
+            <h2>12. Contact</h2>
+            <p>
+              Privacy questions can be submitted through the
+              <a href="https://github.com/AkshatGupta-30/Hushfern/issues">Hushfern support tracker</a>.
+              Do not include sensitive webpage content, passwords, authentication tokens, or other
+              private information in a public issue.
+            </p>
+          </section>
+        </article>
+      </div>
+    </main>
+
+    <footer class="site-footer">
+      <p>Copyright &copy; 2026 Hushfern. All rights reserved.</p>
+      <nav class="footer-links" aria-label="Footer">
+        <a href="privacy-policy.html">Privacy</a>
+        <a href="https://github.com/AkshatGupta-30/Hushfern/blob/main/LICENSE.md">License</a>
+        <a href="https://github.com/AkshatGupta-30/Hushfern">Repository</a>
+      </nav>
+    </footer>
+  </body>
+</html>
