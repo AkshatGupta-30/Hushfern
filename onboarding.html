@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <title>Welcome to Hushfern</title>
+  </head>
+  <body class="onboarding-page">
+    <main class="onboarding-shell" aria-labelledby="onboarding-title">
+      <header class="onboarding-header">
+        <div class="brand-lockup">
+          <img class="brand-mark" src="/logo.svg" width="44" height="44" alt="" />
+          <div>
+            <strong>Hushfern</strong>
+            <span>Private, on-device protection</span>
+          </div>
+        </div>
+        <span class="local-badge">Runs locally</span>
+      </header>
+
+      <section class="intro" id="consentPanel" data-state="loading">
+        <p class="section-label">Your choice comes first</p>
+        <h1 id="onboarding-title">Before Hushfern starts</h1>
+        <p class="intro-copy" id="onboardingSummary">
+          Hushfern needs permission to read visible webpage text so it can identify and blur potentially toxic content on your device.
+        </p>
+
+        <div class="disclosure-grid" aria-label="How Hushfern handles your data">
+          <article>
+            <span class="disclosure-number" aria-hidden="true">01</span>
+            <div>
+              <h2>What it reads</h2>
+              <p>Visible text on regular HTTP and HTTPS webpages while you browse.</p>
+            </div>
+          </article>
+          <article>
+            <span class="disclosure-number" aria-hidden="true">02</span>
+            <div>
+              <h2>What stays on your device</h2>
+              <p>The toxicity model, your settings, site-level counts, and any exceptions you deliberately save.</p>
+            </div>
+          </article>
+          <article>
+            <span class="disclosure-number" aria-hidden="true">03</span>
+            <div>
+              <h2>What it does not send</h2>
+              <p>Page text is not uploaded to Hushfern or a remote moderation service.</p>
+            </div>
+          </article>
+        </div>
+
+        <div class="consent-box">
+          <p id="consentExplanation">
+            By enabling protection, you allow Hushfern to inspect visible page text for on-device toxicity analysis. You can turn it off at any time.
+          </p>
+          <div class="consent-actions">
+            <button class="primary-action" id="enableProtection" type="button">Enable protection</button>
+            <button class="secondary-action" id="declineProtection" type="button">Not now</button>
+          </div>
+          <p class="decision-status" id="decisionStatus" role="status" aria-live="polite"></p>
+        </div>
+
+        <footer>
+          <a href="https://akshatgupta-30.github.io/Hushfern/privacy-policy.html" target="_blank" rel="noreferrer">
+            Read the privacy policy
+          </a>
+          <span>Change this choice later from Privacy &amp; consent in the popup.</span>
+        </footer>
+      </section>
+    </main>
+
+    <script type="module" src="/src/onboarding/onboarding.ts"></script>
+  </body>
+</html>

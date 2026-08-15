@@ -1,6 +1,8 @@
 import './popup.scss'
 
 const SETTINGS_KEY = 'localGuardianSettings'
+const CONSENT_KEY = 'hushfernConsent'
+const CONSENT_VERSION = 1
 const DEFAULT_SETTINGS: HushfernSettings = {
   toxicityThreshold: 50,
   blurIntensity: 8,
@@ -20,7 +22,7 @@ interface PageStats {
   enabled: boolean
 }
 
-type ActivityState = 'loading' | 'active' | 'disabled' | 'unsupported' | 'unavailable' | 'error'
+type ActivityState = 'loading' | 'consent' | 'active' | 'disabled' | 'unsupported' | 'unavailable' | 'error'
 
 const toxicityInput = requireElement<HTMLInputElement>('toxicityThreshold')
 const blurInput = requireElement<HTMLInputElement>('blurIntensity')
@@ -39,9 +41,11 @@ const toxicCountElement = requireElement<HTMLElement>('toxicCount')
 const analyzedCountElement = requireElement<HTMLElement>('analyzedCount')
 const refreshButton = requireElement<HTMLButtonElement>('refreshStats')
 const analyticsButton = requireElement<HTMLButtonElement>('openAnalytics')
+const onboardingButton = requireElement<HTMLButtonElement>('openOnboarding')
 const resumeButton = requireElement<HTMLButtonElement>('resumeProtection')
 
 let currentSettings = { ...DEFAULT_SETTINGS }
+let consentGranted = false
 let activeTabId: number | undefined
 let pendingSettingsWrites = 0
 let activeSettingsWrite = false
@@ -68,7 +72,17 @@ function normalizeSettings(value: unknown): HushfernSettings {
   }
 }
 
-function readLocalStorage(key: string): Promise<Record<string, unknown>> {
+function hasGrantedConsent(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false
+  const candidate = value as { status?: unknown; version?: unknown; decidedAt?: unknown }
+  return (
+    candidate.status === 'granted' &&
+    candidate.version === CONSENT_VERSION &&
+    typeof candidate.decidedAt === 'string'
+  )
+}
+
+function readLocalStorage(key: string | string[]): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
     chrome.storage.local.get(key, (result) => {
       const error = chrome.runtime.lastError
@@ -224,8 +238,12 @@ function renderActivityState(state: ActivityState, stats?: PageStats, host?: str
   activityCounts.setAttribute('aria-busy', state === 'loading' ? 'true' : 'false')
   hostnameElement.hidden = !host
   hostnameElement.textContent = host || ''
-  resumeButton.hidden = state !== 'disabled' || !host
+  const consentAction = state === 'consent'
+  const siteResumeAction = state === 'disabled' && Boolean(host)
+  resumeButton.hidden = !consentAction && !siteResumeAction
+  resumeButton.dataset.action = consentAction ? 'consent' : 'resume-site'
   resumeButton.dataset.hostname = host || ''
+  resumeButton.textContent = consentAction ? 'Review and enable Hushfern' : 'Resume protection on this site'
 
   if (state === 'active' && stats) {
     pageStatus.textContent = 'Protected'
@@ -247,6 +265,11 @@ function renderActivityState(state: ActivityState, stats?: PageStats, host?: str
       badge: 'Loading',
       title: 'Checking this tab',
       message: 'Connecting to the current page.',
+    },
+    consent: {
+      badge: 'Action needed',
+      title: 'Protection is off',
+      message: 'Review how Hushfern handles page text, then choose whether to enable protection.',
     },
     disabled: {
       badge: 'Paused',
@@ -304,6 +327,12 @@ function requestPageStats(tabId: number): Promise<unknown> {
 
 async function refreshPageStats(showLoading = true): Promise<void> {
   const restoreRefreshFocus = document.activeElement === refreshButton
+  if (!consentGranted) {
+    renderActivityState('consent')
+    if (restoreRefreshFocus) refreshButton.focus({ preventScroll: true })
+    return
+  }
+
   if (showLoading) {
     refreshButton.disabled = true
     renderActivityState('loading')
@@ -350,7 +379,8 @@ async function initialize(): Promise<void> {
   renderSettings(DEFAULT_SETTINGS)
 
   try {
-    const stored = await readLocalStorage(SETTINGS_KEY)
+    const stored = await readLocalStorage([SETTINGS_KEY, CONSENT_KEY])
+    consentGranted = hasGrantedConsent(stored[CONSENT_KEY])
     renderSettings(normalizeSettings(stored[SETTINGS_KEY]))
   } catch (error) {
     console.error('[Hushfern Popup] Could not load settings:', error)
@@ -370,8 +400,17 @@ refreshButton.addEventListener('click', () => void refreshPageStats())
 analyticsButton.addEventListener('click', () => {
   void chrome.tabs.create({ url: chrome.runtime.getURL('analytics.html') })
 })
+onboardingButton.addEventListener('click', () => {
+  void chrome.tabs.create({ url: chrome.runtime.getURL('onboarding.html') })
+})
 
 resumeButton.addEventListener('click', async () => {
+  if (resumeButton.dataset.action === 'consent') {
+    await chrome.tabs.create({ url: chrome.runtime.getURL('onboarding.html') })
+    window.close()
+    return
+  }
+
   const hostname = resumeButton.dataset.hostname
   if (!hostname) return
 
@@ -411,6 +450,7 @@ chrome.runtime.onMessage.addListener((message: unknown, sender) => {
   if (!message || typeof message !== 'object') return
   const update = message as { type?: string; stats?: unknown; payload?: unknown }
   if (update.type !== 'PAGE_STATS_UPDATED') return
+  if (!consentGranted) return
   if (activeTabId && sender.tab?.id && sender.tab.id !== activeTabId) return
 
   const stats = normalizePageStats(update.stats ?? update.payload)
@@ -420,7 +460,14 @@ chrome.runtime.onMessage.addListener((message: unknown, sender) => {
 })
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
-  if (areaName !== 'local' || !changes[SETTINGS_KEY]) return
+  if (areaName !== 'local') return
+
+  if (changes[CONSENT_KEY]) {
+    consentGranted = hasGrantedConsent(changes[CONSENT_KEY].newValue)
+    void refreshPageStats(false)
+  }
+
+  if (!changes[SETTINGS_KEY]) return
   // Chrome emits an onChanged event for each local write before its callback.
   // Ignore those self-echoes so rapid slider input cannot snap back to an
   // earlier persisted value while newer writes are still pending.

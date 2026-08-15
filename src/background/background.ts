@@ -3,6 +3,8 @@ export {};
 const SETTINGS_STORAGE_KEY = 'localGuardianSettings';
 const WHITELIST_STORAGE_KEY = 'localGuardianWhitelist';
 const ANALYTICS_STORAGE_KEY = 'localGuardianAnalytics';
+const CONSENT_STORAGE_KEY = 'hushfernConsent';
+const CONSENT_VERSION = 1;
 const OFFSCREEN_DOCUMENT_PATH = 'offscreen.html';
 const OFFSCREEN_ANALYZE_TYPE = 'OFFSCREEN_ANALYZE_BATCH';
 const OFFSCREEN_RESULT_TYPE = 'OFFSCREEN_ANALYZE_BATCH_RESULT';
@@ -80,6 +82,12 @@ interface HushfernWhitelist {
   domains: WhitelistDomainEntry[];
 }
 
+interface HushfernConsent {
+  status: 'granted' | 'declined';
+  version: number;
+  decidedAt: string;
+}
+
 const EMPTY_COUNTS: AnalyticsCounts = {
   analyzed: 0,
   toxic: 0,
@@ -98,6 +106,27 @@ let activeOffscreenRequests = 0;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function normalizeConsent(value: unknown): HushfernConsent | null {
+  if (!isRecord(value)) return null;
+  if (value.status !== 'granted' && value.status !== 'declined') return null;
+  if (value.version !== CONSENT_VERSION || typeof value.decidedAt !== 'string') return null;
+
+  return {
+    status: value.status,
+    version: value.version,
+    decidedAt: value.decidedAt,
+  };
+}
+
+function hasGrantedConsent(value: unknown): boolean {
+  return normalizeConsent(value)?.status === 'granted';
+}
+
+async function consentIsGranted(): Promise<boolean> {
+  const stored = await chrome.storage.local.get(CONSENT_STORAGE_KEY);
+  return hasGrantedConsent(stored[CONSENT_STORAGE_KEY]);
 }
 
 function hasOwn(record: Record<string, unknown>, key: string): boolean {
@@ -548,6 +577,10 @@ async function queueAnalysisJob(
   message: Record<string, unknown>,
   sender: chrome.runtime.MessageSender,
 ): Promise<void> {
+  if (!(await consentIsGranted())) {
+    throw new Error('Enable Hushfern before requesting page analysis.');
+  }
+
   const tabId = sender.tab?.id;
   const frameId = sender.frameId ?? 0;
   const requestId = message.requestId;
@@ -574,6 +607,8 @@ async function queueAnalysisJob(
 }
 
 async function deliverAnalysisResult(message: Record<string, unknown>): Promise<void> {
+  if (!(await consentIsGranted())) return;
+
   const tabId = message.tabId;
   const frameId = message.frameId;
   const requestId = message.requestId;
@@ -634,6 +669,23 @@ function scheduleOffscreenIdleClose(): void {
       .then((exists) => exists ? chrome.offscreen.closeDocument() : undefined)
       .catch((error) => console.debug('[Hushfern BG] Offscreen idle cleanup skipped:', error));
   }, OFFSCREEN_IDLE_TIMEOUT_MS);
+}
+
+async function closeClassifierAndClearBadges(): Promise<void> {
+  if (offscreenIdleTimer) {
+    clearTimeout(offscreenIdleTimer);
+    offscreenIdleTimer = null;
+  }
+  activeOffscreenRequests = 0;
+
+  const tabs = await chrome.tabs.query({});
+  await Promise.allSettled(
+    tabs
+      .filter((tab) => Number.isInteger(tab.id))
+      .map((tab) => updateBadge(tab.id as number, 0, false)),
+  );
+
+  if (await hasOffscreenDocument()) await chrome.offscreen.closeDocument();
 }
 
 function isMatchingOffscreenResponse(
@@ -809,17 +861,41 @@ function validatePageStats(value: unknown): {
 }
 
 chrome.runtime.onInstalled.addListener(() => {
-  void initializeStorageDefaults().catch((error) => {
-    console.error('[Hushfern BG] Failed to initialize storage defaults:', error);
+  void (async () => {
+    await initializeStorageDefaults();
+    const stored = await chrome.storage.local.get(CONSENT_STORAGE_KEY);
+    const consent = normalizeConsent(stored[CONSENT_STORAGE_KEY]);
+
+    if (!consent) {
+      await chrome.tabs.create({ url: chrome.runtime.getURL('onboarding.html') });
+      return;
+    }
+    if (consent.status !== 'granted') return;
+
+    await Promise.allSettled([
+      warmUpClassifier(),
+      reinjectContentIntoOpenTabs(),
+    ]);
+  })().catch((error) => {
+    console.error('[Hushfern BG] Install initialization failed:', error);
   });
-  // Warm the packaged model immediately after install/update. The offscreen
-  // document acknowledges synchronously and owns initialization, so this event
-  // does not depend on service-worker lifetime.
-  void warmUpClassifier().catch((error) => {
-    console.error('[Hushfern BG] Classifier warm-up could not be started:', error);
-  });
-  void reinjectContentIntoOpenTabs().catch((error) => {
-    console.error('[Hushfern BG] Could not reconnect existing website tabs:', error);
+});
+
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== 'local' || !changes[CONSENT_STORAGE_KEY]) return;
+
+  if (hasGrantedConsent(changes[CONSENT_STORAGE_KEY].newValue)) {
+    void warmUpClassifier().catch((error) => {
+      console.error('[Hushfern BG] Classifier warm-up could not be started:', error);
+    });
+    void reinjectContentIntoOpenTabs().catch((error) => {
+      console.error('[Hushfern BG] Could not reconnect existing website tabs:', error);
+    });
+    return;
+  }
+
+  void closeClassifierAndClearBadges().catch((error) => {
+    console.debug('[Hushfern BG] Consent cleanup could not be completed:', error);
   });
 });
 
@@ -871,23 +947,37 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
       return false;
     }
 
-    // Acknowledge synchronously; every later success/failure uses the separate
-    // ANALYSIS_RESULT message and cannot produce an async channel-closed error.
-    sendResponse({ ok: true });
-    void queueAnalysisJob(message, sender).catch((error) => {
-      console.error('[Hushfern BG] Could not queue analysis:', error);
-      void chrome.tabs.sendMessage(
-        tabId as number,
-        {
-          type: ANALYSIS_RESULT_TYPE,
-          requestId,
-          results: [],
-          error: error instanceof Error ? error.message : 'The analysis job could not be queued.',
-        },
-        { frameId },
-      ).catch(() => undefined);
-    });
-    return false;
+    void consentIsGranted()
+      .then((granted) => {
+        if (!granted) {
+          sendResponse({ ok: false, error: 'Enable Hushfern before requesting page analysis.' });
+          return;
+        }
+
+        // Every later success/failure uses the separate ANALYSIS_RESULT
+        // message, so only the fast consent check keeps this channel open.
+        sendResponse({ ok: true });
+        void queueAnalysisJob(message, sender).catch((error) => {
+          console.error('[Hushfern BG] Could not queue analysis:', error);
+          void chrome.tabs.sendMessage(
+            tabId as number,
+            {
+              type: ANALYSIS_RESULT_TYPE,
+              requestId,
+              results: [],
+              error: error instanceof Error ? error.message : 'The analysis job could not be queued.',
+            },
+            { frameId },
+          ).catch(() => undefined);
+        });
+      })
+      .catch((error) => {
+        sendResponse({
+          ok: false,
+          error: error instanceof Error ? error.message : 'Consent status could not be read.',
+        });
+      });
+    return true;
   }
 
   if (message.type === OFFSCREEN_ACTIVITY_STARTED_TYPE) {
@@ -912,7 +1002,11 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
       clearTimeout(offscreenIdleTimer);
       offscreenIdleTimer = null;
     }
-    void ensureOffscreenDocument()
+    void consentIsGranted()
+      .then((granted) => {
+        if (!granted) throw new Error('Enable Hushfern before preparing the local classifier.');
+        return ensureOffscreenDocument();
+      })
       .then(() => sendResponse({ ok: true }))
       .catch((error) => {
         console.error('[Hushfern BG] Could not prepare the offscreen classifier:', error);
@@ -932,12 +1026,16 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
   }
 
   if (message.type === 'RECORD_FALSE_POSITIVE') {
-    void recordAnalytics({
-      analyzed: 0,
-      toxic: 0,
-      falsePositives: 1,
-      domain: getSenderDomain(sender),
-    })
+    void consentIsGranted()
+      .then((granted) => {
+        if (!granted) throw new Error('Protection is not enabled.');
+        return recordAnalytics({
+          analyzed: 0,
+          toxic: 0,
+          falsePositives: 1,
+          domain: getSenderDomain(sender),
+        });
+      })
       .then(() => sendResponse({ ok: true }))
       .catch((error) => {
         console.error('[Hushfern BG] Could not record false positive:', error);
@@ -972,12 +1070,16 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
       return false;
     }
 
-    void recordAnalytics({
-      analyzed,
-      toxic,
-      falsePositives: 0,
-      domain: getSenderDomain(sender),
-    })
+    void consentIsGranted()
+      .then((granted) => {
+        if (!granted) throw new Error('Protection is not enabled.');
+        return recordAnalytics({
+          analyzed,
+          toxic,
+          falsePositives: 0,
+          domain: getSenderDomain(sender),
+        });
+      })
       .then(() => sendResponse({ ok: true }))
       .catch((error) => {
         console.error('[Hushfern BG] Could not record applied results:', error);
@@ -995,7 +1097,8 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
 
     try {
       const stats = validatePageStats(message.stats ?? message.payload);
-      void updateBadge(tabId as number, stats.toxicCount, stats.enabled)
+      void consentIsGranted()
+        .then((granted) => updateBadge(tabId as number, stats.toxicCount, granted && stats.enabled))
         .then(() => sendResponse({ ok: true }))
         .catch((error) => {
           console.error('[Hushfern BG] Could not update action badge:', error);

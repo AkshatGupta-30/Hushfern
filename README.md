@@ -6,6 +6,7 @@ Hushfern is a Manifest V3 Chrome extension that creates a calmer layer for the w
 
 - Adjustable toxicity threshold from 40% to 80%.
 - Adjustable blur intensity from 3px to 10px.
+- Explicit first-run consent before any webpage text is analyzed.
 - Live analyzed and hidden-content counts for the active page.
 - Safe asynchronous blur handling that ignores detached or replaced DOM nodes.
 - Optional hover reveal, with keyboard focus reveal always available.
@@ -28,10 +29,13 @@ The first clean build downloads the pinned fp32 model revision once, verifies ev
 
 ## Use
 
-1. Open any normal HTTP or HTTPS website, then open the Hushfern toolbar popup.
-2. Move either slider; settings are saved immediately and applied to the current page.
-3. Hover or focus a blurred paragraph to reveal it temporarily.
-4. Open **View protection history** for locally stored historical trends.
+1. Review the first-run disclosure and choose **Enable protection**. Until then, Hushfern remains dormant.
+2. Open any normal HTTP or HTTPS website, then open the Hushfern toolbar popup.
+3. Move either slider; settings are saved immediately and applied to the current page.
+4. Hover or focus a blurred paragraph to reveal it temporarily.
+5. Open **View protection history** for locally stored historical trends.
+
+You can review or revoke consent at any time from **Privacy & consent** in the popup. Turning protection off stops new analysis and restores content currently blurred by Hushfern.
 
 ## Website access
 

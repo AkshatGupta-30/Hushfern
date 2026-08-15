@@ -16,6 +16,7 @@ export default defineConfig({
         content: path.resolve(import.meta.dirname, 'src/content/content.ts'),
         popup: path.resolve(import.meta.dirname, 'popup.html'),
         analytics: path.resolve(import.meta.dirname, 'analytics.html'),
+        onboarding: path.resolve(import.meta.dirname, 'onboarding.html'),
         offscreen: path.resolve(import.meta.dirname, 'offscreen.html'),
       },
       output: {

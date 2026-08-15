@@ -2,6 +2,8 @@ console.log('[Hushfern Content] Content script injected.');
 
 const SETTINGS_STORAGE_KEY = 'localGuardianSettings';
 const WHITELIST_STORAGE_KEY = 'localGuardianWhitelist';
+const CONSENT_STORAGE_KEY = 'hushfernConsent';
+const CONSENT_VERSION = 1;
 const QUEUE_ANALYSIS_TYPE = 'QUEUE_ANALYSIS';
 const ANALYSIS_RESULT_TYPE = 'ANALYSIS_RESULT';
 const PING_CONTENT_TYPE = 'PING_CONTENT';
@@ -175,6 +177,8 @@ let settings = { ...DEFAULT_SETTINGS };
 let whitelistedTexts = new Set<string>();
 let whitelistedDomains = new Set<string>();
 let domainWhitelisted = false;
+let consentGranted = false;
+let monitoringStarted = false;
 let textQueue: QueueItem[] = [];
 let queueTimer: ReturnType<typeof setTimeout> | null = null;
 let requestInFlight = false;
@@ -198,6 +202,15 @@ function normalizeSettings(value: unknown): HushfernSettings {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function hasGrantedConsent(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    value.status === 'granted' &&
+    value.version === CONSENT_VERSION &&
+    typeof value.decidedAt === 'string'
+  );
 }
 
 function normalizeText(value: string): string {
@@ -394,7 +407,7 @@ function extractTextElements(target: Element): HTMLElement[] {
 }
 
 function scheduleQueue(delay = QUEUE_DELAY_MS): void {
-  if (queueTimer || requestInFlight || textQueue.length === 0) return;
+  if (!consentGranted || queueTimer || requestInFlight || textQueue.length === 0) return;
   queueTimer = setTimeout(() => {
     queueTimer = null;
     processQueue();
@@ -402,7 +415,7 @@ function scheduleQueue(delay = QUEUE_DELAY_MS): void {
 }
 
 function queueForAnalysis(elements: HTMLElement[]): void {
-  if (domainWhitelisted) return;
+  if (!consentGranted || domainWhitelisted) return;
 
   for (const element of elements) {
     const normalizedText = elementText(element);
@@ -438,15 +451,22 @@ function isItemCurrent(item: QueueItem): boolean {
   );
 }
 
+function releaseQueueItem(item: QueueItem): void {
+  processedNodes.delete(item.element);
+  if (item.element.dataset.localguardianToken === item.token) {
+    delete item.element.dataset.localguardianToken;
+  }
+}
+
 function requeueItems(items: QueueItem[]): void {
-  if (!extensionContextValid) return;
+  if (!extensionContextValid || !consentGranted) {
+    items.forEach(releaseQueueItem);
+    return;
+  }
 
   for (const item of items) {
     if (!isItemCurrent(item)) {
-      processedNodes.delete(item.element);
-      if (item.element.dataset.localguardianToken === item.token) {
-        delete item.element.dataset.localguardianToken;
-      }
+      releaseQueueItem(item);
       if (document.body.contains(item.element)) processNode(item.element);
       continue;
     }
@@ -562,6 +582,7 @@ function requestAnalysis(
 
 function shouldFlag(record: AnalysisRecord): boolean {
   return (
+    consentGranted &&
     !domainWhitelisted &&
     !whitelistedTexts.has(record.normalizedText) &&
     record.score >= settings.toxicityThreshold / 100
@@ -771,7 +792,7 @@ function registerResult(item: QueueItem, result: AnalysisResult): boolean | null
 }
 
 function processQueue(): void {
-  if (!extensionContextValid || requestInFlight || textQueue.length === 0 || domainWhitelisted) return;
+  if (!extensionContextValid || !consentGranted || requestInFlight || textQueue.length === 0 || domainWhitelisted) return;
 
   const batch = textQueue.splice(0, BATCH_SIZE);
   const payloads = batch.map(({ id, text }) => ({ id, text }));
@@ -779,6 +800,11 @@ function processQueue(): void {
 
   void requestAnalysis(payloads).then((response) => {
     requestInFlight = false;
+    if (!consentGranted) {
+      requeueItems(batch);
+      publishStats(true);
+      return;
+    }
     if (!Array.isArray(response.results)) {
       console.warn('[Hushfern Content] Analysis request failed: Invalid response');
       requeueItems(batch);
@@ -835,7 +861,7 @@ function processQueue(): void {
 }
 
 function processNode(node: Node): void {
-  if (!(node instanceof Element) || domainWhitelisted || node.closest('[data-localguardian-ui]')) return;
+  if (!consentGranted || !(node instanceof Element) || domainWhitelisted || node.closest('[data-localguardian-ui]')) return;
 
   const elements = extractTextElements(node);
   if (elements.length > 0) {
@@ -848,7 +874,7 @@ function processNode(node: Node): void {
 }
 
 function scanDocumentForUntrackedText(): void {
-  if (domainWhitelisted) return;
+  if (!consentGranted || domainWhitelisted) return;
 
   document.querySelectorAll<HTMLElement>(TEXT_BLOCK_SELECTOR).forEach((element) => {
     if (
@@ -906,7 +932,7 @@ function currentStats(): PageStats {
     toxicCount,
     analyzedCount,
     hostname: HOSTNAME,
-    enabled: !domainWhitelisted,
+    enabled: consentGranted && !domainWhitelisted,
   };
 }
 
@@ -987,6 +1013,8 @@ function findChangedAllowlistedElement(node: Node): HTMLElement | null {
 }
 
 const observer = new MutationObserver((mutations) => {
+  if (!consentGranted) return;
+
   let shouldPublish = false;
 
   for (const mutation of mutations) {
@@ -1050,8 +1078,58 @@ chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) =
   return false;
 });
 
+function startProtection(): void {
+  if (!consentGranted || monitoringStarted || !extensionContextValid) return;
+
+  injectStyles();
+  observer.observe(document.body, {
+    childList: true,
+    characterData: true,
+    subtree: true,
+  });
+  monitoringStarted = true;
+
+  if (!domainWhitelisted) scanDocumentForUntrackedText();
+  publishStats(true);
+}
+
+function stopProtection(): void {
+  consentGranted = false;
+  monitoringStarted = false;
+  observer.disconnect();
+
+  if (queueTimer) {
+    clearTimeout(queueTimer);
+    queueTimer = null;
+  }
+
+  const queuedItems = textQueue;
+  textQueue = [];
+  queuedItems.forEach(releaseQueueItem);
+  requestInFlight = false;
+
+  for (const pending of pendingAnalysisRequests.values()) {
+    clearTimeout(pending.timeout);
+    pending.reject(new Error('Hushfern protection was turned off.'));
+  }
+  pendingAnalysisRequests.clear();
+
+  for (const record of [...trackedRecords]) removeRecord(record, true);
+  cleanupOrphanedUi();
+  publishStats(true);
+}
+
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== 'local') return;
+
+  if (changes[CONSENT_STORAGE_KEY]) {
+    const nextConsentGranted = hasGrantedConsent(changes[CONSENT_STORAGE_KEY].newValue);
+    if (nextConsentGranted !== consentGranted) {
+      consentGranted = nextConsentGranted;
+      if (consentGranted) startProtection();
+      else stopProtection();
+    }
+  }
 
   if (changes[SETTINGS_STORAGE_KEY]) {
     settings = normalizeSettings(changes[SETTINGS_STORAGE_KEY].newValue);
@@ -1069,26 +1147,18 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 
 async function initialize(): Promise<void> {
   cleanupOrphanedUi();
-  injectStyles();
 
   try {
-    const stored = await storageGet([SETTINGS_STORAGE_KEY, WHITELIST_STORAGE_KEY]);
+    const stored = await storageGet([CONSENT_STORAGE_KEY, SETTINGS_STORAGE_KEY, WHITELIST_STORAGE_KEY]);
+    consentGranted = hasGrantedConsent(stored[CONSENT_STORAGE_KEY]);
     settings = normalizeSettings(stored[SETTINGS_STORAGE_KEY]);
     applyWhitelist(stored[WHITELIST_STORAGE_KEY]);
   } catch (error) {
     console.warn('[Hushfern Content] Using default settings because storage could not be read:', error);
   }
 
-  observer.observe(document.body, {
-    childList: true,
-    characterData: true,
-    subtree: true,
-  });
-
-  if (!domainWhitelisted) {
-    scanDocumentForUntrackedText();
-  }
-  publishStats(true);
+  if (consentGranted) startProtection();
+  else publishStats(true);
 }
 
 void initialize();

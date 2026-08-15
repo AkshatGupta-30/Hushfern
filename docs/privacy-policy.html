@@ -79,8 +79,8 @@
         <article class="legal-document" id="legal-document">
           <p class="notice">
             <strong>Short version:</strong> Hushfern reads eligible visible text only to provide
-            toxicity filtering. Classification happens locally. Page text is not sent to the
-            Hushfern developer or to an inference service.
+            toxicity filtering after you enable protection. Classification happens locally. Page
+            text is not sent to the Hushfern developer or to an inference service.
           </p>
 
           <section class="legal-section" id="scope">
@@ -132,6 +132,11 @@
                     <td>Stored in Chrome local extension storage.</td>
                   </tr>
                   <tr>
+                    <th scope="row">Consent choice</th>
+                    <td>To keep protection dormant until enabled and remember if it is later turned off.</td>
+                    <td>Stored in Chrome local extension storage with a version and decision time.</td>
+                  </tr>
+                  <tr>
                     <th scope="row">Local exceptions</th>
                     <td>To honor domain or text exceptions if they exist, including legacy entries.</td>
                     <td>Stored locally until removed, cleared, or the extension is uninstalled.</td>
@@ -152,6 +157,10 @@
 
           <section class="legal-section" id="use">
             <h2>3. How information is used</h2>
+            <p>
+              On first run, Hushfern presents a disclosure and does not analyze webpage text or
+              initialize its classifier until the user chooses <strong>Enable protection</strong>.
+            </p>
             <p>Hushfern uses the information above only to:</p>
             <ul>
               <li>Analyze eligible text for toxicity on the user's device.</li>
@@ -229,6 +238,8 @@
             <h2>8. Your choices and deletion</h2>
             <p>You can control Hushfern by:</p>
             <ul>
+              <li>Enabling protection from the first-run disclosure.</li>
+              <li>Reviewing or revoking that choice from <strong>Privacy &amp; consent</strong> in the popup.</li>
               <li>Changing the toxicity threshold, blur intensity, and hover setting.</li>
               <li>Pausing or removing Hushfern's access through Chrome's extension controls.</li>
               <li>Clearing Hushfern's extension storage through Chrome.</li>
