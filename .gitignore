@@ -1,5 +1,6 @@
 dist/
 node_modules/
+/yarn.lock
 public/models/Xenova/toxic-bert/config.json
 public/models/Xenova/toxic-bert/special_tokens_map.json
 public/models/Xenova/toxic-bert/tokenizer.json

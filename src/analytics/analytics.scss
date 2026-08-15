@@ -185,16 +185,10 @@ $analytics-panels: ".history-section", ".domains-section";
 }
 
 .empty-mark {
-  @include raised(small, surface-raised);
-  display: grid;
+  display: block;
   width: 56px;
   height: 56px;
-  place-items: center;
-  border-radius: radius(lg);
-  color: color-var(accent-strong);
-  font-family: $font-mono;
-  font-size: 0.78rem;
-  font-weight: 800;
+  object-fit: contain;
 }
 
 .summary-grid {

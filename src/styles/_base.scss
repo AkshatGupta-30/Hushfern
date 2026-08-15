@@ -58,18 +58,11 @@ a:focus-visible {
 }
 
 .brand-mark {
-  @include mixins.raised(small, surface-raised);
-  display: inline-grid;
+  display: block;
   flex: 0 0 auto;
   width: 40px;
   height: 40px;
-  place-items: center;
-  border-radius: tokens.radius(md);
-  color: tokens.color-var(accent-strong);
-  font-family: tokens.$font-mono;
-  font-size: 0.72rem;
-  font-weight: 780;
-  letter-spacing: 0.06em;
+  object-fit: contain;
 }
 
 .section-label {
@@ -114,6 +107,5 @@ a:focus-visible {
 @include mixins.forced-colors {
   .brand-mark {
     border: 1px solid ButtonText;
-    box-shadow: none;
   }
 }
