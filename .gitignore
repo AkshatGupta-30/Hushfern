@@ -7,3 +7,5 @@ public/models/Xenova/toxic-bert/tokenizer.json
 public/models/Xenova/toxic-bert/tokenizer_config.json
 public/models/Xenova/toxic-bert/vocab.txt
 public/models/Xenova/toxic-bert/onnx/model.onnx
+Hushfern/
+store-assets/
